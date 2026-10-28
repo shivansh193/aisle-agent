@@ -16,6 +16,7 @@ from typing import Callable, Dict, List, Optional
 SUPER = "nvidia/nemotron-3-super-120b-a12b"
 LIGHTNING = "nvidia/Nemotron-3_5-Lightning"
 VL = "nvidia/Nemotron-3.5-Super-VL"
+ULTRA = "nvidia/Nemotron-3-Ultra-550b-a55b"
 RECOMMENDATIONS = ("keep", "remove", "ask_shopper")
 
 EXIT_SYSTEM = """You help a shop's staff settle flagged lines on a shopper's bill at the exit.
@@ -161,6 +162,35 @@ class ShopAssistant:
                                purpose="assistant", max_tokens=500, temperature=0.2, **NO_THINK)
         return {"answer": (out["choices"][0]["message"].get("content") or "").strip(), "model": model,
                 "tools": list(self.tools), "mode": "snapshot"}
+
+
+REPORT_SYSTEM = """You write the end-of-day report for a small shop that uses camera-based shelf billing.
+You get today's data: bills, events (takes, put-backs, unchecked visits, restock alerts), stock per
+shelf, and staff decisions at the exit check. Write for the owner: short, concrete, numbers first.
+Reply with JSON only:
+{"headline": "one sentence",
+ "sales_by_shelf": [{"shelf": "...", "items": n, "revenue": n}],
+ "restock": [{"shelf": "...", "product": "...", "left": n, "why": "..."}],
+ "uncertain_hotspots": [{"shelf": "...", "count": n, "likely_cause": "...", "fix": "..."}],
+ "exit_check": "one or two sentences on disputes, removals and advisor agreement",
+ "tomorrow": ["up to 3 short actions"]}
+Likely causes must come from the data (e.g. many unchecked visits, low naming confidence, put-backs);
+say "not enough data" rather than guessing."""
+
+
+class DayReport:
+    """End-of-day report on Nemotron-3-Ultra over a snapshot of the day's data (read-only)."""
+
+    def __init__(self, client, model: str = ULTRA):
+        self.client, self.model = client, model
+
+    def write(self, snapshot: dict) -> dict:
+        out = self.client.chat(self.model, [{"role": "system", "content": REPORT_SYSTEM},
+                                            {"role": "user", "content": json.dumps(snapshot, ensure_ascii=False, default=str)[:24000]}],
+                               purpose="day-report", max_tokens=900, temperature=0.2, **NO_THINK)
+        text = out["choices"][0]["message"].get("content") or ""
+        d = _json_from(text)
+        return {"report": d, "raw": None if d else text.strip()[:2000], "model": self.model}
 
 
 def tool_schemas() -> List[dict]:

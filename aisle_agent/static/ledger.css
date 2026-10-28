@@ -136,3 +136,5 @@ details.card > summary::-webkit-details-marker { display:none; }
 .asform { display:flex; gap:8px; margin-top:10px; } .asform .field { flex:1; } .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .advice { margin-top:18px; padding:14px 16px; border:1px solid var(--rule); border-left:3px solid #76B900; border-radius:10px; background:var(--card); max-width:560px; font-size:14.5px; }
 .advice .caps { margin:8px 0 0; padding-left:16px; font-size:13px; color:var(--ink2); }
+.h3r { margin:14px 0 4px; font:500 11px var(--mono); letter-spacing:.8px; text-transform:uppercase; color:var(--muted); }
+.rep { margin:4px 0 0; padding-left:16px; font-size:14px; } .rep li { margin:3px 0; }

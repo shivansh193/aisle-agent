@@ -504,6 +504,20 @@ def create_app(engine, max_sessions: int = 4, layout=None, agents=None) -> FastA
             "get_restock_alerts": t_restock, "get_exit_decisions": t_decisions, "get_layout": t_layout,
             "get_uncertainty": t_uncertainty}, tool_schemas())
 
+    @app.post("/v1/report")
+    def day_report():
+        """End-of-day report on Nemotron-3-Ultra: sales by shelf, restock list, uncertain-take hotspots."""
+        ag = app.state.agents
+        if ag is None:
+            raise HTTPException(503, "the report needs a Token Factory key (TOKEN_FACTORY_API_KEY)")
+        from .agents import DayReport
+        snap = {"bills": [t_bill(sid) for sid in sessions], "events": t_events(200), "stock": t_stock(),
+                "restock": t_restock(), "exit_decisions": agent_stats(), "uncertainty": t_uncertainty()}
+        try:
+            return DayReport(ag.client).write(snap)
+        except Exception as e:
+            raise HTTPException(503, f"report unavailable: {str(e)[:160]}")
+
     @app.post("/v1/sessions/{sid}/bill/{line_id}/review")
     def review(sid: str, line_id: int, body: dict):
         s = get(sid)

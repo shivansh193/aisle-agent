@@ -92,3 +92,14 @@ def _jpeg():
     import cv2
     import numpy as np
     return cv2.imencode(".jpg", np.zeros((360, 640, 3), np.uint8))[1].tobytes()
+
+
+def test_day_report_uses_ultra_and_parses_json(monkeypatch):
+    monkeypatch.delenv("AISLE_KEY", raising=False)
+    c = FakeClient([reply('{"headline": "Quiet day.", "sales_by_shelf": [], "restock": [], "uncertain_hotspots": [], '
+                          '"exit_check": "None.", "tomorrow": ["Restock jam"]}')])
+    with TestClient(create_app(StubEngine(lambda t: 0.1), agents=Agents(c))) as api:
+        out = api.post("/v1/report").json()
+    assert out["report"]["headline"] == "Quiet day." and out["model"].endswith("Ultra-550b-a55b")
+    snap = json.loads(c.calls[0]["messages"][1]["content"])
+    assert {"bills", "events", "stock", "restock", "exit_decisions", "uncertainty"} <= set(snap)

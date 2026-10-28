@@ -115,5 +115,31 @@
   }
   window.refreshAgreement = agreement;
 
-  badge(); assistant(); agreement();
+  // ---- end-of-day report (layout page)
+  function dayReport() {
+    const btn = $("dayReport"), mount = $("reportMount");
+    if (!btn || !mount) return;
+    btn.onclick = async () => {
+      btn.disabled = true;
+      mount.innerHTML = '<section class="card white"><h2>End-of-day report</h2><p class="muted">Nemotron-3-Ultra is reading today's bills, events, stock and exit decisions…</p></section>';
+      try {
+        const r = await fetch("/v1/report", {method: "POST", headers: hdr()});
+        const out = await r.json();
+        if (!r.ok) throw new Error(out.detail || r.status);
+        const d = out.report;
+        const list = (xs, f) => (xs && xs.length) ? `<ul class="rep">${xs.map(f).join("")}</ul>` : '<p class="muted">None.</p>';
+        mount.innerHTML = `<section class="card white" aria-labelledby="rep-h"><div class="row"><h2 id="rep-h">End-of-day report</h2><span class="mono muted">${esc(short(out.model))}</span></div>
+          ${d ? `<p style="margin:8px 0 0;font-weight:600">${esc(d.headline)}</p>
+          <div class="h3r">Sales by shelf</div>${list(d.sales_by_shelf, (x) => `<li><b>${esc(x.shelf)}</b> · ${esc(x.items)} items · ₹${esc(x.revenue)}</li>`)}
+          <div class="h3r">Restock</div>${list(d.restock, (x) => `<li><b>${esc(x.shelf)}</b>: ${esc(x.product)} (${esc(x.left)} left) <span class="muted">${esc(x.why)}</span></li>`)}
+          <div class="h3r">Uncertain takes</div>${list(d.uncertain_hotspots, (x) => `<li><b>${esc(x.shelf)}</b> · ${esc(x.count)}: ${esc(x.likely_cause)} <span class="muted">→ ${esc(x.fix)}</span></li>`)}
+          <div class="h3r">Exit check</div><p style="margin:4px 0 0">${esc(d.exit_check)}</p>
+          <div class="h3r">Tomorrow</div>${list(d.tomorrow, (x) => `<li>${esc(x)}</li>`)}` : `<pre style="white-space:pre-wrap">${esc(out.raw)}</pre>`}
+        </section>`;
+      } catch (e) { mount.innerHTML = `<section class="card"><p class="bad">Report unavailable: ${esc(e.message)}</p></section>`; }
+      btn.disabled = false;
+    };
+  }
+
+  badge(); assistant(); agreement(); dayReport();
 })();

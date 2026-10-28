@@ -53,7 +53,7 @@
   <div class="pagehead">
     <h1>Shop layout</h1>
     <div class="stats" id="stats"></div>
-    <div class="ctl"><span class="saved" id="saved"></span><input class="field" id="key" type="password" placeholder="Shop key" style="width:150px; min-height:44px"><button class="btn ink" id="save">Save layout</button></div>
+    <div class="ctl"><span class="saved" id="saved"></span><input class="field" id="key" type="password" placeholder="Shop key" style="width:150px; min-height:44px"><button class="btn" id="dayReport">End-of-day report</button><button class="btn ink" id="save">Save layout</button></div>
   </div>
 
   <div class="cols" style="margin-top:20px">
@@ -84,6 +84,7 @@
     </section>
 
     <aside class="side">
+      <div id="reportMount"></div>
       <div class="card white" id="insp"></div>
       <div class="card">
         <h2>Needs attention</h2>
@@ -300,5 +301,6 @@ setInterval(async () => {          // stock moves live while sessions run; local
 }, 3000);
 load();
 </script>
+<script src="/static/nemotron.js"></script>
 </body>
 </html>
