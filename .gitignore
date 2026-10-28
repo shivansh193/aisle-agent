@@ -16,3 +16,4 @@ __pycache__/
 evals/export/output/
 evals/cpu_pose/output/
 evals/eval/output/raw_*.jsonl
+evals/qwen_shelf/output/

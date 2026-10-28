@@ -29,8 +29,13 @@ from PIL import Image  # noqa: E402
 from shelfsense_live.logic import STOCK_LEVELS  # noqa: E402
 from shelfsense_live.models import VjevEngine  # noqa: E402
 
-root = os.path.dirname(glob.glob("/kaggle/input/**/labels.json", recursive=True)[0])
-items = json.load(open(f"{root}/labels.json"))
+items = json.load(open(glob.glob("/kaggle/input/**/labels.json", recursive=True)[0]))
+hits = glob.glob("/kaggle/input/**/shelf/0.jpg", recursive=True)
+if not hits:                                     # uploaded zipped: unpack it
+    for z in glob.glob("/kaggle/input/**/shelf*.zip", recursive=True):
+        zipfile.ZipFile(z).extractall("/kaggle/tmp/crops")
+    hits = glob.glob("/kaggle/tmp/crops/**/0.jpg", recursive=True)
+root = os.path.dirname(os.path.dirname(hits[0]))
 eng = VjevEngine(preset="fast")
 rows = []
 for it in items:
