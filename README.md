@@ -105,7 +105,7 @@ from that shelf.
 Other engines: `--engine stub` (no models, scripted, for UI work) and `--engine vjev` (local
 Qwen2.5-VL on a GPU). Set `AISLE_KEY` to require `Authorization: Bearer <key>` on the API.
 
-Tests (no key and no network needed; the hosted calls are faked): `pytest tests` (74 tests).
+Tests (no key and no network needed; the hosted calls are faked): `pytest tests` (61 tests).
 
 ### Deploy
 
