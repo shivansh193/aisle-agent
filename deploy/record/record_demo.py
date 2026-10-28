@@ -266,14 +266,23 @@ async def scene_shelf_and_exit(pw):
 
 async def scene_agents(pw):
     """The shop assistant (Nemotron tool calls) and the end-of-day report (Nemotron-3-Ultra)."""
-    browser = await pw.chromium.launch()
-    ctx = await new_context(browser, "6_agents", {"ss_key": KEY})
+    browser = await pw.chromium.launch(args=[
+        "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
+        f"--use-file-for-fake-video-capture={SHELF_Y4M}", "--autoplay-policy=no-user-gesture-required"])
+    api = await browser.new_context()
+    lay = await (await api.request.get(f"{BASE}/v1/layout/catalogue", headers={"Authorization": f"Bearer {KEY}"})).json()
+    await api.close()
+    ctx = await new_context(browser, "6_agents", {"ss_source": "device", "ss_key": KEY, "ss_catalogue": lay["products"],
+                                                  "ss_photos": {}, "ss_layout_zones": lay["zones"],
+                                                  "ss_zones": [{"id": "Freezer", "box": [0.01, 0.36, 0.54, 0.99],
+                                                                "skus": lay["zones"].get("Freezer", [])}]})
     page = await ctx.new_page()
     start_clock("agents")
     await page.goto(f"{BASE}/")
-    await page.wait_for_timeout(2000)
-    await page.locator("#asForm").scroll_into_view_if_needed()
-    await page.wait_for_timeout(800)
+    await page.wait_for_timeout(1500)
+    await click(page, "#start", pause=4500)                                # live feed running while the owner asks
+    await page.evaluate("document.getElementById('asForm').scrollIntoView({block: 'end', behavior: 'smooth'})")
+    await page.wait_for_timeout(1200)
     for k, q in enumerate(["What's running low?", "Which shelf had the most uncertain takes, and why?"]):
         n = await page.locator("#asLog li.bot").count()
         await click(page, f'#asChips button:has-text("{q}")', pause=300)
