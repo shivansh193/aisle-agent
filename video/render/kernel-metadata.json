@@ -1,0 +1,16 @@
+{
+  "id": "shivanshkalra/aisle-agent-video",
+  "title": "aisle-agent-video",
+  "code_file": "render.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": ["shivanshkalra/aisle-agent-recordings", "shivanshkalra/shelfsense-brag-assets"],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}
