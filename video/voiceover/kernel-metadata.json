@@ -1,0 +1,16 @@
+{
+  "id": "shivanshkalra/aisle-agent-voiceover",
+  "title": "aisle-agent-voiceover",
+  "code_file": "voiceover.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [],
+  "kernel_sources": ["shivanshkalra/aisle-agent-video"],
+  "competition_sources": [],
+  "model_sources": []
+}
