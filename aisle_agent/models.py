@@ -338,7 +338,11 @@ class NemotronEngine(VjevEngine):
         if naming not in ("siglip", "nemotron"):
             raise ValueError("naming must be auto, siglip or nemotron")
         self.naming = naming
+        self.pose_imgsz = 640 if naming == "siglip" else 416     # CPU: 17 fps at 416 px vs 10 fps at 640
         self.lock = threading.Lock()                 # guards the local embedder; API calls run concurrently
+
+    def new_tracker(self):
+        return PoseTracker(self.pose_weights, imgsz=self.pose_imgsz)
 
     def prepare(self, catalogue: Catalogue):
         if self.naming == "nemotron":                # no local embedder: products are named by Nemotron VL
