@@ -13,7 +13,7 @@
 <header class="top">
   <div class="in">
     <a class="brand" href="/" aria-label="Aisle Agent home"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#17181A"/><path d="M8 10h12M8 14h12M8 18h7" stroke="#F3F1EA" stroke-width="2" stroke-linecap="round"/><circle cx="19.5" cy="18" r="1.8" fill="#8FD16A"/></svg><b>Aisle Agent</b><span class="sep"></span><span class="shop">Aisle demo</span></a>
-    <nav class="tabs" aria-label="Sections"><a href="/" aria-current="page">Console</a><a href="/exit">Exit check<span class="badge" id="toCheck"></span></a><a href="/layout">Layout</a><a href="/cameras">Cameras</a></nav>
+    <nav class="tabs" aria-label="Sections"><a href="/" aria-current="page">Console</a><a href="/exit">Exit check<span class="badge" id="toCheck"></span></a><a href="/layout">Layout</a></nav>
     <div class="topright"><span class="livepill"><span class="dot" id="dot"></span><span class="txt" id="status">idle</span></span></div>
   </div>
 </header>
@@ -25,8 +25,7 @@
       <span class="status idle" id="liveTxt"><span class="dot" id="dot2"></span>not running</span>
       <span class="mono muted" id="srcMeta"></span>
       <div class="ctl">
-        <div class="seg" id="srcSeg" role="group" aria-label="Camera source"><button data-src="device" class="sel">This device</button><button data-src="ring">Ring camera</button></div>
-        <button class="btn ink" id="start">Start</button>
+                <button class="btn ink" id="start">Start</button>
         <button class="btn line" id="stop">Stop</button>
       </div>
     </div>
@@ -35,29 +34,17 @@
       <video id="video" playsinline muted autoplay></video>
       <img id="remote" alt="Live camera feed">
       <canvas id="overlay"></canvas>
-      <div class="empty" id="empty"><b>No feed yet</b><span>Pick a source and press Start. Draw your shelf zones on the picture once it's live.</span></div>
+      <div class="empty" id="empty"><b>No feed yet</b><span>Press Start. Draw your shelf zones on the picture once it's live.</span></div>
       <div class="hud tr"><span><span id="fps">–</span> fps analysed</span><span><span id="nShop">0</span> shoppers</span><span>take → bill <span id="lat">–</span></span></div>
       <figcaption class="hud bl"><span id="srcChip">this device</span></figcaption>
     </figure>
 
-    <div class="card reveal" id="srcDevice" style="display:none">
+    <div class="card reveal" id="srcDevice">
       <div class="cols" style="gap:16px">
         <div style="flex:1 1 240px"><label class="label" for="transport">Transport</label>
           <select class="field" id="transport"><option value="auto">Auto: WebRTC, falls back to WebSocket</option><option value="webrtc">WebRTC</option><option value="ws">WebSocket frames</option></select></div>
         <div style="flex:1 1 240px"><label class="label" for="key">Shop key</label><input class="field" id="key" type="password" placeholder="Aisle Agent key for this shop"></div>
       </div>
-    </div>
-    <div class="card reveal" id="srcRing" style="display:none">
-      <div class="cols" style="gap:16px; align-items:flex-end">
-        <div style="flex:1 1 220px"><label class="label" for="ringShop">Ring account</label>
-          <select class="field" id="ringShop"><option value="">Playground / token below</option></select></div>
-        <div style="flex:1 1 220px" id="tokenBox"><label class="label" for="ringToken">Ring access token</label><input class="field" id="ringToken" type="password" placeholder="Playground token"></div>
-        <div style="flex:0 0 auto"><button class="btn" id="findCams">Find cameras</button></div>
-        <div style="flex:1 1 200px"><label class="label" for="ringDevice">Camera</label><select class="field" id="ringDevice"><option value="">—</option></select></div>
-        <div style="flex:1 1 180px"><label class="label" for="ringMode">Watch</label>
-          <select class="field" id="ringMode"><option value="now">Now (one live view)</option><option value="on_motion">On motion</option><option value="continuous">Continuously</option></select></div>
-      </div>
-      <p class="muted" style="margin:12px 0 0">Ring ends each live view after 60 s (wired) or 30 s (battery). "On motion" reopens it while shoppers are in frame.</p>
     </div>
 
     <div class="card reveal" aria-label="Last 60 seconds">
@@ -136,7 +123,7 @@ const store = {get: (k, d) => { try { const v = localStorage.getItem(k); return 
                set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }};
 $("key").value = store.get("ss_key", "");
 $("catalogue").value = JSON.stringify(store.get("ss_catalogue", DEFAULT_CATALOGUE), null, 1);
-let zones = store.get("ss_zones", []), photos = store.get("ss_photos", {}), source = store.get("ss_source", "device");
+let zones = store.get("ss_zones", []), photos = store.get("ss_photos", {}), source = "device";
 let session = null, pc = null, ingestWs = null, eventsWs = null, stream = null, sendTimer = null;
 let shoppers = [], hands = [], flashes = [], stateCount = 0, lastState = 0, stock = {}, takes = {}, evN = 0, seenLines = new Set(), tape = [];
 let drawing = false, dragStart = null, dragNow = null, pendingBox = null;
@@ -144,7 +131,6 @@ let drawing = false, dragStart = null, dragNow = null, pendingBox = null;
 const q = () => $("key").value ? `?key=${encodeURIComponent($("key").value)}` : "";
 const qa = () => $("key").value ? `&key=${encodeURIComponent($("key").value)}` : "";
 const headers = (extra = {}) => Object.assign($("key").value ? {Authorization: `Bearer ${$("key").value}`} : {}, extra);
-const ringHeaders = (extra = {}) => headers(Object.assign(extra, $("ringToken").value && !$("ringShop").value ? {"X-Ring-Token": $("ringToken").value} : {}));
 const wsUrl = (path) => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${path}${q()}`;
 const catalogue = () => JSON.parse($("catalogue").value);
 const productName = (sku) => { try { return (catalogue().find((p) => p.sku === sku) || {}).name || sku; } catch (e) { return sku; } };
@@ -168,37 +154,6 @@ function renderTape() {
 }
 setInterval(renderTape, 1000);
 
-// ---------------------------------------------------------------- source
-function setSource(s) {
-  source = s; store.set("ss_source", s);
-  document.querySelectorAll("#srcSeg button").forEach((b) => b.classList.toggle("sel", b.dataset.src === s));
-  $("srcDevice").style.display = s === "device" ? "block" : "none";
-  $("srcRing").style.display = s === "ring" ? "block" : "none";
-  $("srcTitle").textContent = s === "ring" ? ($("ringDevice").selectedOptions[0]?.textContent || "Ring camera") : "This device";
-  $("srcChip").textContent = s === "ring" ? "Ring live view · WebRTC (WHEP)" : "this device";
-}
-document.querySelectorAll("#srcSeg button").forEach((b) => b.onclick = () => setSource(b.dataset.src));
-async function loadShops() {
-  try {
-    const r = await fetch("/v1/ring/accounts", {headers: headers()}); if (!r.ok) return;
-    const {shops} = await r.json();
-    $("ringShop").innerHTML = '<option value="">Playground / token below</option>' + shops.map((s) => `<option value="${esc(s.shop_id)}">${esc(s.name)} · ${esc(s.account_identifier)}</option>`).join("");
-    const pre = new URLSearchParams(location.search);
-    if (pre.get("shop")) $("ringShop").value = pre.get("shop");
-    $("tokenBox").style.display = $("ringShop").value ? "none" : "block";
-  } catch (e) {}
-}
-$("ringShop").onchange = () => { $("tokenBox").style.display = $("ringShop").value ? "none" : "block"; };
-$("findCams").onclick = async () => {
-  try {
-    const shop = $("ringShop").value;
-    const r = await fetch(`/v1/ring/devices${shop ? "?shop=" + encodeURIComponent(shop) : ""}`, {headers: ringHeaders()});
-    const body = await r.json(); if (!r.ok) throw new Error(body.detail || r.status);
-    $("ringDevice").innerHTML = body.devices.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}${d.online === false ? " (offline)" : ""}</option>`).join("") || '<option value="">no cameras shared</option>';
-    log(`${body.devices.length} camera(s) found`, "", "Ring"); setSource("ring");
-  } catch (e) { log(e.message, "err", "Ring"); }
-};
-$("ringDevice").onchange = () => setSource("ring");
 
 // ---------------------------------------------------------------- zones
 function renderZones() {
@@ -304,19 +259,10 @@ async function start() {
   $("empty").style.display = "none"; log(`session started (${session.mode})`);
   openEvents();
   showPhone();
-  if (source === "ring") return startRing();
   const mode = $("transport").value;
   if (mode === "ws") return startWs();
   const ok = await startWebrtc().catch((e) => { console.warn(e); return false; });
   if (!ok && mode === "auto") { log("WebRTC did not connect, using WebSocket frames"); startWs(); }
-}
-async function startRing() {
-  const device_id = $("ringDevice").value; if (!device_id) { setStatus("find and pick a camera first", "warn"); return; }
-  const mode = $("ringMode").value, shop = $("ringShop").value || undefined;
-  const r = await fetch(`/v1/sessions/${session.session_id}/ring`, {method: "POST", headers: ringHeaders({"Content-Type": "application/json"}), body: JSON.stringify({device_id, start: mode, shop})});
-  const body = await r.json(); if (!r.ok) { setStatus("Ring live view failed", "warn"); log(body.detail, "err", "Ring"); return; }
-  showRemote(); setStatus(mode === "on_motion" ? "armed · waiting for motion" : "Ring live view", mode === "on_motion" ? "warn" : "live");
-  $("srcMeta").textContent = "Ring · WebRTC";
 }
 function showRemote() { $("video").style.display = "none"; const img = $("remote"); img.style.display = "block"; img.src = `/v1/sessions/${session.session_id}/preview.mjpg?fps=10${qa()}`; }
 async function startWebrtc() {
@@ -357,10 +303,6 @@ function openEvents() {
     else if (e.type === "stock") { stock[e.zone] = Object.assign(stock[e.zone] || {}, {level: e.level, label: e.label}); renderZones(); }
     else if (e.type === "restock" || e.type === "restocked") { stock[e.zone] = Object.assign(stock[e.zone] || {}, {alert: e.type === "restock"}); renderZones();
       log(e.type === "restock" ? `${e.zone} is running empty` : `${e.zone} restocked`, "restock", e.type); }
-    else if (e.type === "ring_stream") { log(`live view ${e.state}${e.frames ? " · " + e.frames + " frames" : ""}`, "", "Ring");
-      if (e.state === "started") { showRemote(); setStatus("Ring live view", "live"); }
-      if (e.state === "ended") setStatus("live view ended", "warn"); }
-    else if (e.type === "ring_event") log(`${e.sub_type || ""} ${e.type.replace("ring_", "")}`, "", "Ring");
     else if (e.type === "error") log(e.message, "err", "error");
     if (e.bill) renderBill(e.bill);
   };
@@ -415,18 +357,8 @@ async function refreshBadge() {
 }
 $("start").onclick = () => start().catch((e) => { setStatus("error", "warn"); log(e.message, "err", "error"); });
 $("stop").onclick = stop;
-$("key").onchange = () => { store.set("ss_key", $("key").value); loadShops(); };
-const pre = new URLSearchParams(location.search); if (pre.get("source")) source = pre.get("source");
-$("ringToken").value = sessionStorage.getItem("ss_ring_token") || "";
-let opened = null; try { opened = JSON.parse(sessionStorage.getItem("ss_ring_open") || "null"); } catch (e) {}
-setSource(source); renderZones(); renderPhotos(); refreshBadge(); setInterval(refreshBadge, 5000);
-loadShops().then(() => {                                  // a camera opened from the Cameras page
-  if (!opened) return;
-  $("ringShop").value = opened.shop || ""; $("tokenBox").style.display = opened.shop ? "none" : "block";
-  $("ringDevice").innerHTML = `<option value="${esc(opened.device)}">${esc(opened.name)}</option>`;
-  $("ringMode").value = opened.mode; sessionStorage.removeItem("ss_ring_open"); setSource("ring");
-  log(`${opened.name} ready. Press Start to open its live view`, "", "Ring");
-});
+$("key").onchange = () => { store.set("ss_key", $("key").value); };
+renderZones(); renderPhotos(); refreshBadge(); setInterval(refreshBadge, 5000);
 requestAnimationFrame(draw);
 </script>
 <script src="/static/nemotron.js"></script>

@@ -103,4 +103,4 @@ target, and real-shop footage is the next test. The full evaluation through Toke
 - Video: (YouTube, under 3 min)
 - Live demo: https://<ip-with-dashes>.sslip.io (shop key shared with judges in the testing notes)
 
-No affiliation with or endorsement by Nebius, NVIDIA, Amazon or Ring.
+No affiliation with or endorsement by Nebius or NVIDIA.

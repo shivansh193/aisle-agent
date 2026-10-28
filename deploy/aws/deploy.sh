@@ -2,8 +2,7 @@
 # Copy the app to the EC2 instance and (re)start it as a systemd service. Run from the repo root:
 #   HOST=<instance ip> bash deploy/aws/deploy.sh
 #   ENGINE=nemotron ...   NVIDIA Nemotron VL via Nebius Token Factory (needs TOKEN_FACTORY_API_KEY in .env)
-# Needs ~/.ssh/aisle-agent-aws.pem and .aisle_key (the shop key; also put Ring credentials
-# in .ring_env as KEY=VALUE lines when a Ring app is registered).
+# Needs ~/.ssh/aisle-agent-aws.pem, .aisle_key (the shop key) and .env (TOKEN_FACTORY_API_KEY).
 set -euo pipefail
 HOST=${HOST:?set HOST to the instance IP}
 KEY=${SSH_KEY:-$HOME/.ssh/aisle-agent-aws.pem}
@@ -19,7 +18,6 @@ scp -i "$KEY" -o StrictHostKeyChecking=accept-new "$tmp/app.tgz" "ubuntu@$HOST:/
 
 {
   echo "AISLE_KEY=$(cat .aisle_key)"
-  [ -f .ring_env ] && cat .ring_env || true
   [ -f .env ] && grep -E '^(TOKEN_FACTORY_API_KEY|NEBIUS_API_KEY)=' .env || true
 } | "${SSH[@]}" "sudo install -m 600 -o root -g root /dev/stdin /etc/aisle-agent.env"
 
@@ -36,7 +34,7 @@ After=network-online.target
 User=ubuntu
 WorkingDirectory=/opt/ss
 EnvironmentFile=/etc/aisle-agent.env
-Environment=PYTHONPATH=/opt/ss/app HF_HOME=/opt/ss/cache/hf RING_LINK_STORE=/opt/ss/ring_links.json AISLE_LAYOUT=/opt/ss/shop_layout.json
+Environment=PYTHONPATH=/opt/ss/app HF_HOME=/opt/ss/cache/hf AISLE_LAYOUT=/opt/ss/shop_layout.json
 ExecStart=/opt/ss/venv/bin/python -m aisle_agent.server --engine $ENGINE --preset fast --host 127.0.0.1 --port 8000 --pose-weights /opt/ss/yolo11n-pose.pt
 Restart=always
 RestartSec=5

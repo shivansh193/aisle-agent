@@ -20,8 +20,8 @@ be slow and expensive.
 ## How it works
 
 ```
-camera (phone, laptop, IP / Ring camera)
-  └─ WebRTC (WHIP) · WebSocket JPEG · Ring live view (WHEP) ─▶ one session per camera, newest frame wins
+camera (phone, laptop or IP camera over the shelf)
+  └─ WebRTC (WHIP) · WebSocket JPEG frames ─▶ one session per camera, newest frame wins
        every frame, local:  YOLO11n-pose + ByteTrack ─▶ people, wrists, hand boxes
        a hand enters and leaves a shelf zone ─▶ visit
             Nemotron-3.5-Super-VL, calibrated by vjev:  P(holding) before vs after
@@ -101,7 +101,6 @@ from that shelf.
 | `/exit` | Exit check: lines to verify, before/after evidence, **Nemotron-3-Super advice**, keep/remove, agreement rate |
 | `/layout` | Shop layout: floor plan, products, stock and minimums per shelf, each tied to a camera zone |
 | `/b/<token>` | The shopper's phone: their bill, live, with "Not mine" |
-| `/cameras` | Camera sources, including Ring cameras through the Ring Partner API |
 
 Other engines: `--engine stub` (no models, scripted, for UI work) and `--engine vjev` (local
 Qwen2.5-VL on a GPU). Set `AISLE_KEY` to require `Authorization: Bearer <key>` on the API.
@@ -136,4 +135,4 @@ run is projected to cost more than $5. The whole evaluation above cost $0.12.
 
 Apache-2.0 (`LICENSE`). Evaluation data: GroceryStoreDataset (Klasson et al., WACV 2019), Retail
 Shelf Void Detection (Kaggle), Pexels stock clips. No affiliation with or endorsement by Nebius,
-NVIDIA, Amazon or Ring.
+NVIDIA or any camera maker.

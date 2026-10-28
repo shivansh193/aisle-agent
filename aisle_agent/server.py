@@ -16,7 +16,6 @@ GET    /v1/sessions                       live sessions with their totals and li
 GET    /v1/sessions/{id}/bill/{line}/evidence   before/after hand crops, scores, how it was named
 POST   /v1/sessions/{id}/bill/{line}/review     {action: approve | remove, by?, note?}: the exit check
 GET    /exit                              staff exit-check page
-GET    /cameras                           linked Ring accounts and cameras
 GET    /v1/sessions/{id}/preview.mjpg     live feed: the frames the pipeline analyses, as MJPEG (any source)
 GET    /v1/sessions/{id}/preview.jpg      the latest one
 GET    /v1/sessions/{id}/shelves          shelf watch: stock level per zone, history, open restock alerts
@@ -32,15 +31,6 @@ GET    /layout                            floor-plan editor: shelves, products, 
 GET    /v1/layout   PUT /v1/layout        the layout with each shelf's state (ok | low | empty | alert)
 POST   /v1/layout/shelves/{id}/restock    {sku, qty} set a count after refilling (or {} to clear an alert)
 GET    /v1/layout/catalogue               products, and the products on each zone, for the console
-
-Ring cameras (see ring.py):
-GET    /v1/ring/devices                   the linked Ring cameras
-POST   /v1/sessions/{id}/ring             {device_id, start: "now" | "on_motion"} pull the camera's live
-                                           view (WHEP) into this session, now or on its next motion event
-DELETE /v1/sessions/{id}/ring
-POST   /v1/ring/webhook                   Ring event webhook; X-Signature verified with RING_HMAC_KEY
-Ring auth: RING_ACCESS_TOKEN (or refresh token + client credentials) in the environment, or an
-`X-Ring-Token` header (e.g. a Playground token) on the calls above.
 
 If AISLE_KEY is set, every call needs `Authorization: Bearer <key>` or `?key=<key>`.
 """
@@ -111,7 +101,7 @@ def make_agents(engine) -> Optional[Agents]:
     return Agents(client, TokenFactoryBackend(client=client))
 
 
-def create_app(engine, max_sessions: int = 4, link_store=None, layout=None, agents=None) -> FastAPI:
+def create_app(engine, max_sessions: int = 4, layout=None, agents=None) -> FastAPI:
     app = FastAPI(title="Aisle Agent live", version="0.1.0")
     sessions: dict = {}
     peers: dict = {}
@@ -141,8 +131,7 @@ def create_app(engine, max_sessions: int = 4, link_store=None, layout=None, agen
 
     @app.middleware("http")
     async def auth_mw(request: Request, call_next):
-        if (request.url.path.startswith("/v1/") and request.url.path != "/v1/ring/webhook"   # webhook: HMAC instead
-                and not authorised(request.headers, request.query_params)):
+        if request.url.path.startswith("/v1/") and not authorised(request.headers, request.query_params):
             return Response(status_code=401, content="missing or wrong key")
         return await call_next(request)
 
@@ -201,10 +190,6 @@ def create_app(engine, max_sessions: int = 4, link_store=None, layout=None, agen
     def layout_catalogue():
         return shop.catalogue()
 
-    @app.get("/cameras", response_class=HTMLResponse)
-    def cameras_page():
-        return (STATIC / "cameras.html").read_text(encoding="utf-8")
-
     from fastapi.staticfiles import StaticFiles
     app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
@@ -254,169 +239,6 @@ def create_app(engine, max_sessions: int = 4, link_store=None, layout=None, agen
         raw = os.environ.get("AISLE_ICE")
         return {"iceServers": json.loads(raw) if raw else [{"urls": "stun:stun.l.google.com:19302"}]}
 
-    # ------------------------------------------------------------------ Ring
-    from .ring_link import LinkStore, RingLinker, link_time_ok
-    linker = RingLinker(link_store or LinkStore())
-    ring_bind: dict = {}           # sid -> {"client", "device_id", "mode", "stream", "reopens"}
-    seen_requests: list = []
-    KEEP_WATCHING_S = 5.0          # reopen a capped live view while someone was seen this recently
-    MAX_REOPENS = 30
-
-    def ring_client(request: Request, shop: Optional[str] = None):
-        from .ring import RingClient
-        try:
-            if shop:
-                return linker.client(shop)
-            return RingClient.from_env(request.headers.get("x-ring-token"))
-        except KeyError as e:
-            raise HTTPException(404, str(e))
-        except ValueError as e:
-            raise HTTPException(400, str(e))
-
-    async def start_ring_stream(sid: str):
-        b, s = ring_bind[sid], sessions.get(sid)
-        if s is None or (b.get("stream") and not b["stream"]._closed):
-            return b.get("stream")
-
-        async def ended(stream):
-            s.publish([{"type": "ring_stream", "state": "ended", "device_id": b["device_id"], "frames": stream.frames}])
-            # Ring caps a live view at 30 s (battery) / 60 s (wired): keep watching while it matters
-            people = any(s.now() - ts <= KEEP_WATCHING_S for ts, _ in s.last_seen.values())
-            keep = b["mode"] == "continuous" or (b["mode"] == "on_motion" and people)
-            if keep and ring_bind.get(sid) is b and sid in sessions and b["reopens"] < MAX_REOPENS:
-                b["reopens"] += 1
-                try:
-                    await start_ring_stream(sid)
-                except Exception as e:
-                    s.publish([{"type": "error", "message": f"Ring live view: {e}"}])
-
-        b["stream"] = await b["client"].open_stream(b["device_id"], lambda f: s.offer(f), ended)
-        s.publish([{"type": "ring_stream", "state": "started", "device_id": b["device_id"], "reopen": b["reopens"]}])
-        return b["stream"]
-
-    # -- linking a shop owner's own Ring account (one-way account linking; ring_link.py)
-    @app.post("/ring/oauth/token")
-    async def ring_token_exchange(request: Request):
-        """Token Exchange URL: Ring POSTs the authorization code here (server to server)."""
-        if not linker.configured:
-            raise HTTPException(503, "Ring client credentials are not configured")
-        form = await request.form()
-        if not form.get("code"):
-            raise HTTPException(400, "missing code")
-        try:
-            await asyncio.to_thread(linker.exchange_code, form["code"])
-        except Exception as e:
-            raise HTTPException(502, f"token exchange failed: {e}")
-        return {"status": "ok"}
-
-    @app.get("/ring/link", response_class=HTMLResponse)
-    def ring_link_page(nonce: str = "", time: str = ""):
-        """Account Link URL: Ring sends the owner's browser here with ?nonce=&time=."""
-        if not nonce or not link_time_ok(time):
-            return HTMLResponse((STATIC / "link.html").read_text(encoding="utf-8").replace("{{state}}", "expired"), 400)
-        return (STATIC / "link.html").read_text(encoding="utf-8").replace("{{state}}", "ready")
-
-    @app.post("/ring/link/complete")
-    async def ring_link_complete(body: dict):
-        if key and not secrets.compare_digest(str(body.get("key", "")), key):
-            raise HTTPException(401, "that is not this shop's Aisle Agent key")
-        missing = [f for f in ("nonce", "time", "shop_name", "email") if not body.get(f)]
-        if missing:
-            raise HTTPException(400, f"missing {', '.join(missing)}")
-        try:
-            return await asyncio.to_thread(linker.complete, body["nonce"], str(body["time"]), body["shop_name"], body["email"])
-        except LookupError as e:
-            raise HTTPException(404, str(e))
-        except ValueError as e:
-            raise HTTPException(400, str(e))
-        except Exception as e:
-            raise HTTPException(502, f"Ring did not confirm the link: {e}")
-
-    @app.get("/v1/ring/accounts")
-    def ring_accounts():
-        return {"configured": linker.configured, "shops": [linker.store.public(sid) for sid in linker.store.shops]}
-
-    @app.delete("/v1/ring/accounts/{shop_id}")
-    def ring_forget(shop_id: str):
-        """Forget a linked shop here. (The owner removes Aisle Agent in the Ring app to revoke it at Ring.)"""
-        with linker.store.lock:
-            if linker.store.shops.pop(shop_id, None) is None:
-                raise HTTPException(404, "no such linked shop")
-            linker.store.save()
-        return {"ok": True}
-
-    @app.get("/v1/ring/devices")
-    async def ring_devices(request: Request, shop: Optional[str] = None):
-        client = ring_client(request, shop)
-        try:
-            return {"devices": [{k: d[k] for k in ("id", "name", "online")} for d in await asyncio.to_thread(client.devices)]}
-        except Exception as e:                       # httpx errors carry Ring's status and message
-            raise HTTPException(502, f"Ring: {e}")
-
-    @app.post("/v1/sessions/{sid}/ring")
-    async def ring_attach(sid: str, body: dict, request: Request):
-        get(sid)
-        if not body.get("device_id"):
-            raise HTTPException(400, "device_id is required")
-        mode = body.get("start", "now")
-        if mode not in ("now", "on_motion", "continuous"):
-            raise HTTPException(400, "start must be 'now', 'on_motion' or 'continuous'")
-        old = ring_bind.get(sid, {}).get("stream")
-        if old:
-            await old.close()
-        ring_bind[sid] = {"client": ring_client(request, body.get("shop")), "device_id": body["device_id"], "mode": mode,
-                          "stream": None, "reopens": 0, "shop": body.get("shop")}
-        if mode in ("now", "continuous"):
-            try:
-                await start_ring_stream(sid)
-            except Exception as e:
-                raise HTTPException(502, f"Ring live view: {e}")
-        return {"device_id": body["device_id"], "start": mode,
-                "streaming": bool(ring_bind[sid]["stream"]), "session_url": getattr(ring_bind[sid]["stream"], "session_url", None)}
-
-    @app.delete("/v1/sessions/{sid}/ring")
-    async def ring_detach(sid: str):
-        b = ring_bind.pop(sid, None)
-        if b and b.get("stream"):
-            await b["stream"].close()
-        return {"ok": True}
-
-    @app.post("/v1/ring/webhook")
-    async def ring_webhook(request: Request):
-        from .ring import parse_event, verify_signature
-        hkey = os.environ.get("RING_HMAC_KEY")
-        if not hkey:
-            raise HTTPException(503, "RING_HMAC_KEY is not configured")
-        raw = await request.body()
-        if not verify_signature(hkey, raw, request.headers.get("x-signature")):
-            raise HTTPException(401, "bad signature")
-        import json
-        ev = parse_event(json.loads(raw))
-        if ev["request_id"] in seen_requests:
-            return {"status": "duplicate"}
-        seen_requests.append(ev["request_id"])
-        del seen_requests[:-1000]
-        if ev["type"] == "app_integration_removed" and ev["account_id"]:
-            gone = linker.unlink_account(ev["account_id"])
-            for sid, b in list(ring_bind.items()):
-                if gone and b.get("shop") == gone:
-                    if b.get("stream"):
-                        await b["stream"].close()
-                    ring_bind.pop(sid, None)
-            return {"status": "processed", "unlinked": bool(gone)}
-        started = []
-        for sid, b in list(ring_bind.items()):
-            if b["device_id"] != ev["device_id"] or sid not in sessions:
-                continue
-            sessions[sid].publish([{"type": "ring_event", **ev}])
-            if ev["type"] == "motion_detected" and b["mode"] == "on_motion":
-                b["reopens"] = 0
-                task = asyncio.get_running_loop().create_task(start_ring_stream(sid))   # reply within Ring's 5 s
-                task.add_done_callback(lambda t, sid=sid: t.cancelled() or not t.exception() or sessions.get(sid) and
-                                       sessions[sid].publish([{"type": "error", "message": f"Ring live view: {t.exception()}"}]))
-                started.append(sid)
-        return {"status": "processed", "sessions_started": len(started)}
-
     @app.get("/v1/sessions/{sid}")
     def stats(sid: str):
         return get(sid).stats()
@@ -424,9 +246,6 @@ def create_app(engine, max_sessions: int = 4, link_store=None, layout=None, agen
     @app.delete("/v1/sessions/{sid}", status_code=204)
     async def delete(sid: str):
         s = get(sid)
-        b = ring_bind.pop(sid, None)
-        if b and b.get("stream"):
-            await b["stream"].close()
         if sid in peers:
             await peers.pop(sid).close()
         await s.close()

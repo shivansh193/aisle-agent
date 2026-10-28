@@ -1,10 +1,8 @@
 """Record the demo walkthrough from the live system: a real browser drives the real UI (Playwright).
 
-Runs on the server itself (next to the GPU). Every number on screen comes from the live models.
-  BASE=https://<host> AISLE_KEY=... RING_TOKEN=<Playground token> python record_demo.py
+Runs on the server itself. Every number on screen comes from the live models (Nemotron via Token Factory).
+  BASE=https://<host> AISLE_KEY=... python record_demo.py
 Scenes (one recording each, in OUT):
-  1_ring.webm   Cameras page -> Playground token -> find cameras -> watch continuously -> open live
-                view -> start -> draw a zone on Ring's live video -> stock readings, the 30 s cap reopening
   2_shelf.webm  the console with shelf footage fed in as the browser's camera (Chrome's fake-camera
                 input; the console says "this device") -> draw the shelf zone -> takes print on the bill
                 -> "not mine" on one line
@@ -23,7 +21,6 @@ from playwright.async_api import async_playwright
 
 BASE = os.environ["BASE"].rstrip("/")
 KEY = os.environ["AISLE_KEY"]
-TOKEN = os.environ.get("RING_TOKEN", "")
 OUT = os.environ.get("OUT", "/opt/ss/rec")
 SHELF_Y4M = os.environ.get("SHELF_Y4M", "/opt/ss/rec/shelf.y4m")
 W, H = 1440, 900
@@ -133,37 +130,6 @@ async def finish(ctx, name):
     path = await video.path()
     os.replace(path, f"{OUT}/{name}.webm")
     print("recorded", name, flush=True)
-
-
-async def scene_ring(pw):
-    browser = await pw.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])
-    ctx = await new_context(browser, "1_ring", {"ss_source": "ring", "ss_zones": [], "ss_cam_modes": {}})
-    page = await ctx.new_page()
-    await page.goto(f"{BASE}/cameras")
-    await page.wait_for_timeout(1800)
-    await type_into(page, "#key", KEY, delay=25)
-    await page.keyboard.press("Tab")
-    await page.wait_for_timeout(1200)
-    await type_into(page, "#pgToken", TOKEN[:40], delay=12)                 # the field is masked; paste the rest
-    await page.fill("#pgToken", TOKEN)
-    await click(page, "#pgFind", pause=2500)
-    await click(page, '#pgCams button[data-m="continuous"]', pause=900)
-    await click(page, "#pgCams [data-open]", pause=2200)                   # -> console, Ring source prefilled
-    await click(page, "#start", pause=9000)                                # live view arrives over WebRTC (WHEP)
-    await click(page, "#draw", pause=500)
-    await drag_zone(page, [0.27, 0.58, 0.53, 0.97])                        # the parcel on the doorstep
-    await page.fill("#zoneName", "")
-    await type_into(page, "#zoneName", "Doorstep")
-    await click(page, "#zoneSave", pause=1500)
-    await glide(page, W * 0.5, H * 0.45, steps=40)
-    await page.wait_for_timeout(30000)                                     # stock readings; Ring's cap ends the view, it reopens
-    await page.mouse.wheel(0, 700)
-    await page.wait_for_timeout(4000)
-    await page.mouse.wheel(0, -700)
-    await page.wait_for_timeout(2500)
-    await click(page, "#stop", pause=1500)
-    await finish(ctx, "1_ring")
-    await browser.close()
 
 
 async def scene_layout(pw):
@@ -288,9 +254,7 @@ async def scene_shelf_and_exit(pw):
 
 async def main():
     async with async_playwright() as pw:
-        which = os.environ.get("SCENES", "ring,layout,shelf").split(",")
-        if "ring" in which and TOKEN:
-            await scene_ring(pw)
+        which = os.environ.get("SCENES", "layout,shelf").split(",")
         if "layout" in which:
             await scene_layout(pw)
         if "shelf" in which:
