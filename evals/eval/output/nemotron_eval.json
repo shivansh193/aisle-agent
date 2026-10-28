@@ -63,10 +63,10 @@
   "candidates": 5,
   "nemotron_clean": {
    "top1": 0.9533,
-   "ece": 0.0302,
+   "ece": 0.0282,
    "answered": 300,
-   "ms_p50": 1576.5,
-   "ms_p95": 1995.0
+   "ms_p50": 1510.5,
+   "ms_p95": 1929.0
   },
   "qwen_local_clean": {
    "top1": 0.9033,
@@ -75,15 +75,24 @@
   },
   "nemotron_cctv": {
    "top1": 0.7867,
-   "ece": 0.1198,
+   "ece": 0.1202,
    "answered": 300,
-   "ms_p50": 1143.5,
-   "ms_p95": 1689.1
+   "ms_p50": 1125.0,
+   "ms_p95": 1390.0
   },
   "qwen_local_cctv": {
    "top1": 0.6567,
    "ece": 0.0754,
    "ms_mean_T4": 294.5
+  },
+  "calibration": {
+   "temperature": 1.727,
+   "fitted_on": 300,
+   "scored_on": 300,
+   "clean_ece_before": 0.0449,
+   "clean_ece_after": 0.0501,
+   "cctv_ece_before": 0.0937,
+   "cctv_ece_after": 0.0379
   }
  },
  "zone_takes": {
@@ -120,10 +129,10 @@
   }
  },
  "usage_total": {
-  "calls": 1132,
-  "prompt_tokens": 382867,
-  "completion_tokens": 1132,
-  "cost_usd": 0.115867,
+  "calls": 600,
+  "prompt_tokens": 201738,
+  "completion_tokens": 600,
+  "cost_usd": 0.061058,
   "errors": 0
  },
  "logprobs_supported": true

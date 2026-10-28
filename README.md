@@ -60,7 +60,7 @@ decisions** (yes/no, choice, score, box) instead of free text. The new
 ## Results
 
 Hosted Nemotron vs a local VLM (Qwen2.5-VL-3B on an NVIDIA T4), scored on **the same items**
-(`evals/`). Nothing is tuned for Nemotron: calibration is the identity.
+(`evals/`). Accuracy below is uncalibrated; the calibration step is reported separately.
 
 | Check | Nemotron-3.5-Super-VL (Token Factory) | Qwen2.5-VL-3B (local T4) |
 |---|---|---|
@@ -71,10 +71,16 @@ Hosted Nemotron vs a local VLM (Qwen2.5-VL-3B on an NVIDIA T4), scored on **the 
 | Latency per decision | p50 1.1–1.6 s, p95 1.7–2.5 s | ~0.3 s |
 | Cost | **$0.17 per 1,000 shelf visits**; $0.10 per 1,000 shelf readings | a GPU |
 
+**Calibration.** Nemotron VL was overconfident on CCTV-quality images. One choice temperature
+(T = 1.73), fitted on half the naming items and scored on the other half, cuts its expected
+calibration error on CCTV images from **0.094 to 0.038** (clean: 0.045 → 0.050). The fitted file ships
+as `aisle_agent/nemotron_calibration.json` and loads automatically, so "verify at exit" triggers on
+honest confidence.
+
 What this says:
 - **Better at naming,** especially on CCTV-quality images (+13 points).
 - **Slower per call.** That's fine for a check that runs once per shelf visit, and the frame loop never waits for it.
-- **Less well calibrated on CCTV images.** That's why calibration is fitted per model.
+- **Overconfident on CCTV images until calibrated;** one fitted temperature fixes most of it.
 - **Take finding is still the weak point** on close-up, handheld footage: 3 of 8. A fixed shop camera is the case it's built for, and footage from a real shop is the next test.
 
 **No GPU needed.** With the vision-language model hosted, the only local model on every frame is

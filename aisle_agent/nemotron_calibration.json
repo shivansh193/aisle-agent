@@ -1,0 +1,17 @@
+{
+ "choice_temperature": 1.7270097088726721,
+ "score_temperature": 1.0,
+ "noul_platt": {
+  "mu": [
+   0.0
+  ],
+  "sd": [
+   1.0
+  ],
+  "w": [
+   1.0,
+   0.0
+  ]
+ },
+ "_note": "choice temperature fitted on held-out GroceryStoreDataset naming items (evals/eval)"
+}

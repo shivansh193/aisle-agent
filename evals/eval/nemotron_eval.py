@@ -146,7 +146,8 @@ def names(r, ex):
             d, ms, err = timed(lambda: r.decider.decide({"assets": {"c": img}, "questions": {"w": {
                 "type": "choice", "question": "Which product is this?", "options": it["options"], "image": "c"}}}))
             row[cond] = ({"error": err, "ms": ms} if d is None else
-                         {"choice": d["answers"]["w"]["choice"], "confidence": d["answers"]["w"]["confidence"], "ms": ms})
+                         {"choice": d["answers"]["w"]["choice"], "confidence": d["answers"]["w"]["confidence"], "ms": ms,
+                          "probs": [d["answers"]["w"]["probabilities"][o] for o in it["options"]]})
         row["ms"] = row["clean"]["ms"]
         return row
 
@@ -163,7 +164,32 @@ def names(r, ex):
         out[f"qwen_local_{cond}"] = {"top1": round(float(np.mean([c for c, _ in q])), 4),
                                      "ece": round(ece([p for _, p in q], [c for c, _ in q]), 4),
                                      "ms_mean_T4": round(float(np.mean([it[f"qwen_{cond}"]["ms"] for it in items])), 1)}
+    out["calibration"] = calibrate(items, by)
     return out
+
+
+def calibrate(items, by):
+    """One choice temperature for Nemotron, fitted on even-numbered items (clean + CCTV), scored on odd ones."""
+    from vjev import fit_temperature
+    from vjev.calibration import softmax
+    rows = {"fit": [], "test": []}
+    for it in items:
+        for cond in ("clean", "cctv"):
+            a = by[it["i"]][cond]
+            if "probs" in a:
+                z = np.log(np.clip(np.array(a["probs"], float), 1e-9, 1))
+                rows["fit" if it["i"] % 2 == 0 else "test"].append((z, it["options"].index(it["answer"]), cond))
+    T = fit_temperature([z for z, _, _ in rows["fit"]], [y for _, y, _ in rows["fit"]])
+    res = {"temperature": round(T, 4), "fitted_on": len(rows["fit"]), "scored_on": len(rows["test"])}
+    for cond in ("clean", "cctv"):
+        test = [(z, y) for z, y, c in rows["test"] if c == cond]
+        for tag, t in (("before", 1.0), ("after", T)):
+            P = [softmax(z, t) for z, _ in test]
+            res[f"{cond}_ece_{tag}"] = round(ece([p.max() for p in P], [p.argmax() == y for p, (_, y) in zip(P, test)]), 4)
+    json.dump({"choice_temperature": T, "score_temperature": 1.0, "noul_platt": {"mu": [0.0], "sd": [1.0], "w": [1.0, 0.0]},
+               "_note": "choice temperature fitted on held-out GroceryStoreDataset naming items (evals/eval)"},
+              open(os.path.join(ROOT, "aisle_agent", "nemotron_calibration.json"), "w"), indent=1)
+    return res
 
 
 def visits(r, ex, labels):
