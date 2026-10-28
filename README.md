@@ -67,7 +67,7 @@ Hosted Nemotron vs a local VLM (Qwen2.5-VL-3B on an NVIDIA T4), scored on **the 
 | Naming a product by name within a shelf of 5 (GroceryStoreDataset, 300 phone photos) | **95.3%** top-1, ECE 0.030 | 90.3%, ECE 0.031 |
 | Same, CCTV-quality images (96 px, JPEG q30) | **78.7%**, ECE 0.120 | 65.7%, ECE 0.075 |
 | Takes on 9 handheld stock clips, 8 hand-labelled takes (26 shelf visits) | **3 found**, 1 false | 2 found, 1 false |
-| Shelf watch: empty gap vs stocked (484 real shelf crops) | AUROC 0.867; **83.3%** at the alert threshold | AUROC 0.883, 66.1% (a different random draw from the same dataset) |
+| Shelf watch: empty gap vs stocked (484 real shelf crops) | AUROC 0.867; **83.3%** right at the alert threshold | AUROC **0.884**; 66.3% at the same threshold |
 | Latency per decision | p50 1.1–1.6 s, p95 1.7–2.5 s | ~0.3 s |
 | Cost | **$0.17 per 1,000 shelf visits**; $0.10 per 1,000 shelf readings | a GPU |
 

@@ -54,7 +54,7 @@ Factory.
 | Naming within a shelf of 5, clean phone photos (300) | **95.3%** | 90.3% |
 | Naming, CCTV-quality images | **78.7%** | 65.7% |
 | Takes on 9 handheld stock clips (8 labelled) | **3 found**, 1 false | 2 found, 1 false |
-| Shelf watch (484 real shelf crops) | AUROC 0.867, 83.3% at the alert threshold | AUROC 0.883 (different sample) |
+| Shelf watch (484 real shelf crops) | AUROC 0.867, **83.3%** right at the alert threshold | AUROC 0.884, 66.3% at the same threshold |
 | Latency per decision | 1.1–1.6 s p50 | ~0.3 s |
 
 Take finding on close-up handheld stock footage is still the weak point. A fixed shop camera is the
