@@ -8,13 +8,14 @@ HOST=${HOST:?set HOST to the instance IP}
 KEY=${SSH_KEY:-$HOME/.ssh/aisle-agent-aws.pem}
 VJEV_SRC=${VJEV_SRC:-vjev}
 ENGINE=${ENGINE:-nemotron}
-SSH=(ssh -i "$KEY" -o StrictHostKeyChecking=accept-new "ubuntu@$HOST")
+PORT=${SSH_PORT:-22}                           # 2222 on networks that block outbound 22
+SSH=(ssh -p "$PORT" -i "$KEY" -o StrictHostKeyChecking=accept-new "ubuntu@$HOST")
 
 tmp=$(mktemp -d)
 cp -r aisle_agent "$tmp/" && cp -r "$VJEV_SRC" "$tmp/vjev"
 find "$tmp" -name __pycache__ -prune -exec rm -rf {} +
 tar -C "$tmp" -czf "$tmp/app.tgz" aisle_agent vjev
-scp -i "$KEY" -o StrictHostKeyChecking=accept-new "$tmp/app.tgz" "ubuntu@$HOST:/tmp/app.tgz"
+scp -P "$PORT" -i "$KEY" -o StrictHostKeyChecking=accept-new "$tmp/app.tgz" "ubuntu@$HOST:/tmp/app.tgz"
 
 {
   echo "AISLE_KEY=$(cat .aisle_key)"

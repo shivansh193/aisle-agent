@@ -1,0 +1,16 @@
+{
+  "id": "shivanshkalra/aisle-agent-qwen-shelf",
+  "title": "aisle-agent-qwen-shelf",
+  "code_file": "qwen_shelf.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": ["shivanshkalra/aisle-agent-shelf-crops", "shivanshkalra/vjev-src", "shivanshkalra/shelfsense-live-src"],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}
