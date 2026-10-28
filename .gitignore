@@ -1,0 +1,18 @@
+# secrets
+.env
+.aisle_key
+.ring_env
+*.pem
+# runtime state
+shop_layout.json
+ring_links.json
+_dev_layout.json
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+# model weights and large eval inputs (re-created by evals/export on Kaggle)
+*.pt
+evals/export/output/
+evals/cpu_pose/output/
+evals/eval/output/raw_*.jsonl

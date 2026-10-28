@@ -1,0 +1,10 @@
+{"_note": "Hand labels from 3 Hz frame strips (strips/<clip>.jpg). takes: clear take times (s). ignore: ambiguous moments, events within 1 s count neither way. 3735636 excluded (basket handle in hand, takes not visible).",
+ "29846459": {"takes": [], "ignore": []},
+ "29846460": {"takes": [1.0], "ignore": [3.7]},
+ "29846458": {"takes": [2.0], "ignore": []},
+ "29814585": {"takes": [12.2], "ignore": [7.3]},
+ "5103996": {"takes": [4.0, 14.0], "ignore": []},
+ "39221961": {"takes": [], "ignore": []},
+ "8465179": {"takes": [4.0, 9.4], "ignore": [13.4]},
+ "8420772": {"takes": [4.2], "ignore": [8.6]},
+ "8420595": {"takes": [], "ignore": [4.5, 5.5, 6.4]}}

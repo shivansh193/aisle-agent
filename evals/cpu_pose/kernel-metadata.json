@@ -1,0 +1,16 @@
+{
+  "id": "shivanshkalra/aisle-agent-cpu-pose",
+  "title": "aisle-agent-cpu-pose",
+  "code_file": "cpu_pose_check.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": [],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}

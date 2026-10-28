@@ -1,0 +1,17 @@
+# server + Nemotron engine (hosted vision-language model; no GPU needed for it)
+fastapi==0.115.12
+uvicorn==0.34.2
+websockets==13.1
+httpx==0.28.1
+python-multipart==0.0.20
+opencv-python-headless==4.10.0.84
+pillow
+numpy<2.3
+aiortc==1.10.1
+# local, every frame: people and hands; photo matching on a take
+ultralytics==8.3.130
+lap==0.5.12
+torch
+transformers>=4.51
+# tests
+pytest

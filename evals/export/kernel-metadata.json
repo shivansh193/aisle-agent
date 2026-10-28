@@ -1,0 +1,16 @@
+{
+  "id": "shivanshkalra/aisle-agent-eval-export",
+  "title": "aisle-agent-eval-export",
+  "code_file": "nemotron_export.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "keywords": [],
+  "dataset_sources": ["shivanshkalra/vjev-src", "shivanshkalra/aisle-agent-src", "aminefaris/retail-shelf-void-detection-dataset"],
+  "kernel_sources": [],
+  "competition_sources": [],
+  "model_sources": []
+}

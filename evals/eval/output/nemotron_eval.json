@@ -1,0 +1,130 @@
+{
+ "probe": {
+  "model": "nvidia/Nemotron-3.5-Super-VL",
+  "answer": null,
+  "logprobs_returned": true,
+  "top": [
+   [
+    "The",
+    -0.007
+   ],
+   [
+    "Th",
+    -5.507
+   ],
+   [
+    "1",
+    -6.007
+   ],
+   [
+    "Okay",
+    -9.007
+   ],
+   [
+    "I",
+    -10.257
+   ]
+  ],
+  "usage": {
+   "completion_tokens": 1,
+   "prompt_tokens": 298,
+   "total_tokens": 299,
+   "completion_tokens_details": {
+    "accepted_prediction_tokens": null,
+    "audio_tokens": null,
+    "reasoning_tokens": 1,
+    "rejected_prediction_tokens": null
+   },
+   "prompt_tokens_details": {
+    "audio_tokens": null,
+    "cached_tokens": 0,
+    "created_cache_tokens": 0,
+    "multimodal_tokens": {
+     "image": 258
+    }
+   }
+  }
+ },
+ "shelf_watch": {
+  "n": 484,
+  "answered": 484,
+  "cost_usd": 0.0503,
+  "nemotron": {
+   "auroc": 0.8669,
+   "acc_at_alert_0.4": 0.8326,
+   "ms_p50": 1287.0,
+   "ms_p95": 1750.3
+  },
+  "qwen_local": "labels differ from the original run; not comparable"
+ },
+ "naming_by_name": {
+  "n": 300,
+  "cost_usd": 0.0611,
+  "candidates": 5,
+  "nemotron_clean": {
+   "top1": 0.9533,
+   "ece": 0.0302,
+   "answered": 300,
+   "ms_p50": 1576.5,
+   "ms_p95": 1995.0
+  },
+  "qwen_local_clean": {
+   "top1": 0.9033,
+   "ece": 0.0312,
+   "ms_mean_T4": 293.5
+  },
+  "nemotron_cctv": {
+   "top1": 0.7867,
+   "ece": 0.1198,
+   "answered": 300,
+   "ms_p50": 1143.5,
+   "ms_p95": 1689.1
+  },
+  "qwen_local_cctv": {
+   "top1": 0.6567,
+   "ece": 0.0754,
+   "ms_mean_T4": 294.5
+  }
+ },
+ "zone_takes": {
+  "visits": 26,
+  "cost_usd": 0.0044,
+  "labelled_takes": 8,
+  "nemotron": {
+   "takes_found": 3,
+   "false_takes": 1,
+   "missed": 5,
+   "precision": 0.75,
+   "recall": 0.375,
+   "events": {
+    "take": 6,
+    "put": 1,
+    "touch": 19,
+    "unchecked": 0
+   },
+   "ms_p50_per_visit": 1605.5,
+   "ms_p95_per_visit": 2505.8
+  },
+  "qwen_local": {
+   "takes_found": 2,
+   "false_takes": 1,
+   "missed": 6,
+   "precision": 0.667,
+   "recall": 0.25,
+   "events": {
+    "take": 4,
+    "put": 4,
+    "touch": 18,
+    "unchecked": 0
+   }
+  }
+ },
+ "usage_total": {
+  "calls": 1132,
+  "prompt_tokens": 382867,
+  "completion_tokens": 1132,
+  "cost_usd": 0.115867,
+  "errors": 0
+ },
+ "logprobs_supported": true
+}

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect Ring to Aisle Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ground:#F3F1EA; --card:#FFFFFF; --rule:#DAD5C8; --ink:#17181A; --ink2:#3E4248; --muted:#5B5F66; --green:#1D6B42; --red:#B42318;
+          --ui:'Geist', system-ui, sans-serif; --mono:'Geist Mono', ui-monospace, monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--ground); color:var(--ink); font:16px/1.5 var(--ui); }
+  main { max-width:520px; margin:0 auto; padding:48px 20px; }
+  .word { font-weight:800; font-size:22px; letter-spacing:-0.4px; }
+  h1 { font-size:30px; line-height:1.15; letter-spacing:-0.6px; margin:28px 0 8px; }
+  p { color:var(--ink2); margin:0 0 20px; }
+  form { background:var(--card); border:1px solid var(--rule); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:16px; }
+  label { font-weight:600; font-size:14px; display:block; margin-bottom:6px; }
+  .hint { font-size:13px; color:var(--muted); margin-top:4px; }
+  input { width:100%; font:inherit; border:1px solid #CFC9BB; border-radius:9px; padding:12px; background:#FBFAF6; color:var(--ink); }
+  input:focus { outline:2px solid var(--ink); outline-offset:1px; }
+  button { font:inherit; font-weight:700; border:0; border-radius:10px; padding:14px; min-height:48px; background:var(--ink); color:var(--ground); cursor:pointer; }
+  button[disabled] { opacity:.6; cursor:wait; }
+  .msg { border-radius:10px; padding:14px 16px; font-size:15px; display:none; }
+  .msg.ok { display:block; background:#E3F0E8; color:var(--green); }
+  .msg.err { display:block; background:#F8E1DE; color:var(--red); }
+  .fine { font-size:13px; color:var(--muted); margin-top:22px; }
+  .fine li { margin-bottom:6px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="word">Aisle Agent</div>
+  <div id="ready">
+    <h1>Connect your Ring cameras</h1>
+    <p>Ring sent you here to confirm this is your shop. Once you do, Aisle Agent can open your cameras' live view and hear their motion alerts. You choose which cameras it watches afterwards.</p>
+    <form id="f">
+      <div><label for="shop">Shop name</label><input id="shop" autocomplete="organization" required></div>
+      <div><label for="email">Your email</label><input id="email" type="email" autocomplete="email" required>
+        <div class="hint">Ring shows it masked (like a***z@example.com) next to the app, so you know which account it is.</div></div>
+      <div><label for="key">Aisle Agent key for your shop</label><input id="key" type="password" autocomplete="current-password">
+        <div class="hint">The key you were given when your shop was set up.</div></div>
+      <button id="go" type="submit">Connect</button>
+      <div class="msg" id="msg" role="status"></div>
+    </form>
+    <ul class="fine">
+      <li>Frames are analysed and thrown away. Only the small crops behind each bill line are kept, for the exit check.</li>
+      <li>To disconnect, remove Aisle Agent from the Ring app. Its access ends straight away.</li>
+    </ul>
+  </div>
+  <div id="expired" style="display:none">
+    <h1>This link has expired</h1>
+    <p>Ring's connection links last 10 minutes. Go back to the Ring app and add Aisle Agent again.</p>
+  </div>
+</main>
+<script>
+  const state = "{{state}}";
+  if (state !== "ready") { document.getElementById("ready").style.display = "none"; document.getElementById("expired").style.display = "block"; }
+  const qs = new URLSearchParams(location.search);
+  const msg = (text, kind) => { const m = document.getElementById("msg"); m.textContent = text; m.className = "msg " + kind; };
+  document.getElementById("f").onsubmit = async (e) => {
+    e.preventDefault();
+    const go = document.getElementById("go"); go.disabled = true; go.textContent = "Confirming with Ring…";
+    try {
+      const r = await fetch("/ring/link/complete", {method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({nonce: qs.get("nonce"), time: qs.get("time"), shop_name: document.getElementById("shop").value,
+                              email: document.getElementById("email").value, key: document.getElementById("key").value})});
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.detail || "Something went wrong");
+      msg(`Connected. ${body.name} is linked to Ring account ${body.account_identifier}. You can close this page and go back to the Ring app.`, "ok");
+      go.textContent = "Connected";
+    } catch (err) { msg(err.message, "err"); go.disabled = false; go.textContent = "Connect"; }
+  };
+</script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aisle Agent · Exit check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/ledger.css">
+<style>
+  .q { display:block; width:100%; text-align:left; border:1px solid var(--rule); border-radius:10px; padding:12px 14px; min-height:44px; background:var(--card); margin-top:8px; }
+  .q.sel { background:var(--ink); color:var(--ground); border-color:var(--ink); }
+  .q .why { display:block; margin-top:4px; font:12px var(--mono); }
+  .pair { display:grid; grid-template-columns:repeat(2, minmax(0, 220px)); gap:14px; }
+  .pair figure { margin:0; }
+  .pair img, .pair .ph { width:100%; aspect-ratio:1/1; object-fit:cover; display:block; border-radius:8px; background:var(--screen); }
+  .pair figcaption { margin-top:6px; font:13px var(--mono); }
+  .h3 { margin:22px 0 10px; font:500 12px var(--mono); letter-spacing:.8px; color:var(--muted); text-transform:uppercase; }
+  .cand { display:grid; grid-template-columns:minmax(0,1fr) 140px 48px; gap:12px; align-items:center; font-size:14px; margin-top:8px; max-width:560px; }
+  .cand .b { height:8px; background:var(--rule2); border-radius:4px; overflow:hidden; } .cand .b span { display:block; height:8px; }
+  .feed img { display:block; }
+  .rec div { padding:7px 0; border-top:1px solid var(--rule2); font:12px var(--mono); color:var(--ink2); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="in">
+    <a class="brand" href="/" aria-label="Aisle Agent home"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#17181A"/><path d="M8 10h12M8 14h12M8 18h7" stroke="#F3F1EA" stroke-width="2" stroke-linecap="round"/><circle cx="19.5" cy="18" r="1.8" fill="#8FD16A"/></svg><b>Aisle Agent</b><span class="sep"></span><span class="shop">Aisle demo</span></a>
+    <nav class="tabs" aria-label="Sections"><a href="/">Console</a><a href="/exit" aria-current="page">Exit check<span class="badge" id="toCheck"></span></a><a href="/layout">Layout</a><a href="/cameras">Cameras</a></nav>
+    <div class="topright"><span class="livepill"><span class="dot" id="dot"></span><span class="txt" id="status">idle</span></span></div>
+  </div>
+</header>
+
+<main class="page cols" style="gap:24px">
+  <section style="flex:1 1 280px; min-width:0" aria-labelledby="q-h">
+    <h1 id="q-h">To check</h1>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px">
+      <div style="flex:1 1 200px"><label class="label" for="session">Shopper at the counter</label><select class="field" id="session"><option value="">none</option></select></div>
+      <div style="flex:1 1 140px"><label class="label" for="key">Shop key</label><input class="field" id="key" type="password"></div>
+    </div>
+    <p class="muted" style="font-size:14px; margin:6px 0 4px" id="qSub">No shopper selected.</p>
+    <div id="queue"></div>
+    <h2 style="margin:26px 0 0; font-size:15px">Rest of the bill</h2>
+    <div id="others"></div>
+    <p class="mono muted" id="agentStats" style="margin-top:16px;font-size:12.5px"></p>
+  </section>
+
+  <section class="card white" style="flex:999 1 520px; min-width:0; padding:22px 24px" aria-live="polite" id="detail">
+    <p class="muted" style="margin:0">Pick a line to see what the camera saw.</p>
+  </section>
+
+  <aside style="flex:1 1 300px; min-width:0; display:flex; flex-direction:column; gap:16px">
+    <section class="card" aria-label="Live feed">
+      <div class="label">Live feed · what the system sees</div>
+      <figure class="feed" style="aspect-ratio:16/9"><img id="feedImg" alt="Live camera feed"><div class="empty" id="feedNone">no shopper selected</div></figure>
+    </section>
+    <section class="card" aria-labelledby="sb-h">
+      <h2 id="sb-h" style="margin-bottom:6px">Bill</h2>
+      <div id="billRows"></div>
+      <div class="total" style="border-top:2px solid var(--ink); margin-top:6px"><b>Total</b><span class="v" id="total" style="font-size:22px">₹0</span></div>
+    </section>
+    <section class="card rec" aria-labelledby="au-h">
+      <h2 id="au-h" style="margin-bottom:6px">Record</h2>
+      <div id="audit"></div>
+    </section>
+  </aside>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN");
+const cap = (s) => { s = String(s ?? ""); return s.charAt(0).toUpperCase() + s.slice(1); };
+try { $("key").value = JSON.parse(localStorage.getItem("ss_key") || '""'); } catch (e) {}
+const headers = (extra = {}) => Object.assign($("key").value ? {Authorization: `Bearer ${$("key").value}`} : {}, extra);
+const q = () => $("key").value ? `?key=${encodeURIComponent($("key").value)}` : "";
+let sid = "", bill = null, selected = null, ws = null;
+const WHY = {verify: ["not sure what it was", "var(--amber)"], disputed: ['shopper said "not mine"', "var(--red)"],
+             removed: ["removed at the exit", "var(--muted)"], approved: ["kept at the exit", "var(--green)"], ok: ["confident take", "var(--green)"]};
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, Object.assign({headers: headers({"Content-Type": "application/json"})}, opts));
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`); return r.json();
+}
+async function refreshSessions() {
+  try {
+    const {sessions} = await api("/v1/sessions");
+    const n = sessions.reduce((s, x) => s + x.to_verify, 0); $("toCheck").textContent = n ? String(n) : "";
+    const cur = $("session").value;
+    $("session").innerHTML = sessions.length ? sessions.map((s) => `<option value="${esc(s.session_id)}">${esc(s.session_id)} · ${s.to_verify} to check · ${fmt(s.total)}</option>`).join("")
+      : '<option value="">none at the counter</option>';
+    if (sessions.some((s) => s.session_id === cur)) $("session").value = cur;
+    else if (sessions.length) $("session").value = sessions.reduce((a, b) => b.to_verify > a.to_verify || (b.to_verify === a.to_verify && b.total > a.total) ? b : a).session_id;  // whoever most needs a look
+    if ($("session").value !== sid) select($("session").value);
+  } catch (e) { $("qSub").textContent = e.message.startsWith("401") ? "Enter this shop's key." : e.message; }
+}
+function select(id) {
+  sid = id; selected = null; bill = null; if (ws) ws.close();
+  render(); $("detail").innerHTML = '<p class="muted" style="margin:0">Pick a line to see what the camera saw.</p>';
+  $("feedImg").removeAttribute("src"); $("feedNone").style.display = "flex";
+  if (!sid) return;
+  $("feedImg").src = `/v1/sessions/${sid}/preview.mjpg?fps=6${$("key").value ? "&key=" + encodeURIComponent($("key").value) : ""}`;
+  $("feedImg").onload = () => { $("feedNone").style.display = "none"; };
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/v1/sessions/${sid}/events${q()}`);
+  ws.onmessage = (m) => { const e = JSON.parse(m.data); if (e.bill) { bill = e.bill; render(); if (selected && e.line && e.line.id === selected) show(selected); } };
+}
+function qRow(l) {
+  const [why, col] = WHY[l.status] || ["", "var(--muted)"];
+  return `<button class="q ${l.id === selected ? "sel" : ""}" data-id="${l.id}"><span class="row" style="flex-wrap:nowrap"><b>${esc(cap(l.name))}</b><span class="mono">${fmt(l.price)}</span></span>
+    <span class="why" style="color:${l.id === selected ? "#F3F1EA" : col}">${esc(l.note || why)}${l.zone ? " · " + esc(l.zone) : ""}</span></button>`;
+}
+function render() {
+  const lines = bill ? bill.lines : [];
+  const todo = lines.filter((l) => l.status === "verify" || l.status === "disputed"), rest = lines.filter((l) => !(l.status === "verify" || l.status === "disputed"));
+  $("qSub").textContent = !sid ? "No shopper selected." : todo.length ? `${todo.length} line${todo.length > 1 ? "s" : ""} need a look.` : "Nothing to check. The bill can be settled.";
+  $("queue").innerHTML = todo.map(qRow).join("");
+  $("others").innerHTML = rest.length ? rest.map(qRow).join("") : '<p class="muted">No other lines.</p>';
+  document.querySelectorAll(".q").forEach((el) => el.onclick = () => show(+el.dataset.id));
+  $("billRows").innerHTML = lines.map((l) => `<div class="row" style="flex-wrap:nowrap;padding:8px 0;border-top:1px solid var(--rule2);font-size:14px;${l.status === "removed" ? "text-decoration:line-through;color:var(--faint)" : ""}"><span>${esc(cap(l.name))}</span><span class="mono">${fmt(l.price)}</span></div>`).join("")
+    || '<p class="muted">No lines yet.</p>';
+  $("total").textContent = fmt(bill ? bill.total : 0);
+  $("audit").innerHTML = bill && bill.audit.length ? bill.audit.slice().reverse().map((a) => {
+    const name = (lines.find((l) => l.id === a.line) || {}).name || `line ${a.line}`;
+    return `<div>${esc(name)}: ${a.action === "approve" ? "kept" : "removed"} by ${esc(a.by)}${a.note ? " · " + esc(a.note) : ""}</div>`; }).join("") : '<p class="muted" style="margin:0">No decisions yet.</p>';
+}
+function pair(p) {
+  if (!p) return "";
+  const pr = (x) => x === null || x === undefined ? "not seen" : `holding <b>${x.toFixed(2)}</b>`;
+  const img = (src, alt) => src ? `<img src="${src}" alt="${alt}">` : '<div class="ph"></div>';
+  return `<div class="pair"><figure>${img(p.before, "The hand before the shelf visit")}<figcaption>before · ${pr(p.p_before)}</figcaption></figure>
+    <figure>${img(p.after, "The hand after the shelf visit")}<figcaption>after · ${pr(p.p_after)}</figcaption></figure></div>`;
+}
+async function show(id) {
+  selected = id; render();
+  try {
+    const e = await api(`/v1/sessions/${sid}/bill/${id}/evidence`), l = e.line;
+    const [why] = WHY[l.status] || [""];
+    const names = Object.fromEntries((bill ? bill.lines : []).map((x) => [x.sku, x.name]));
+    const cands = e.candidates ? Object.entries(e.candidates).sort((a, b) => b[1] - a[1]).slice(0, 4) : [];
+    const decided = l.status === "approved" || l.status === "removed";
+    $("detail").innerHTML = `
+      <div class="row" style="align-items:baseline"><h2 style="font-size:22px">${esc(cap(l.name))}</h2><span class="mono" style="font-size:22px;font-weight:600">${fmt(l.price)}</span></div>
+      <div style="margin-top:4px;font-size:14px;color:var(--ink2)">${esc(l.note ? l.note : why)} · confidence ${l.confidence.toFixed(2)}</div>
+      ${e.take ? `<div class="h3">The hand at the shelf${e.take.zone ? " · " + esc(e.take.zone) : ""}</div>${pair(e.take)}` : ""}
+      ${e.put_back ? `<div class="h3" style="color:var(--amber)">Put back afterwards${e.put_back.zone ? " · " + esc(e.put_back.zone) : ""}</div>${pair(e.put_back)}` : ""}
+      ${cands.length ? `<div class="h3">What it could be · ${esc(e.method || "")}</div>${cands.map(([s, p], i) => `<div class="cand"><span>${esc(cap(names[s] || s))}</span>
+        <span class="b" aria-hidden="true"><span style="width:${Math.round(p * 100)}%;background:${i ? "var(--faint)" : p >= 0.5 ? "var(--green)" : "var(--amber)"}"></span></span><span class="mono" style="text-align:right">${p.toFixed(2)}</span></div>`).join("")}` : ""}
+      <div id="advice"></div>
+      ${decided ? `<p class="muted" style="margin-top:22px">Decided: ${l.status === "approved" ? "kept on the bill" : "removed from the bill"}.</p>` : `
+      <label class="label" for="note" style="margin-top:24px">Note for the record (optional)</label>
+      <input id="note" class="field" placeholder="e.g. checked the bag" style="max-width:560px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"><button class="btn go" id="ap" style="min-height:48px;padding:12px 20px">Keep on bill · ${fmt(l.price)}</button>
+        <button class="btn danger" id="rm" style="min-height:48px;padding:12px 20px">Remove from bill</button></div>`}`;
+    if (window.loadAdvice && (l.status === "verify" || l.status === "disputed" || decided)) window.loadAdvice(sid, id);
+    if (!decided) { $("ap").onclick = () => decide(id, "approve"); $("rm").onclick = () => decide(id, "remove"); }
+  } catch (err) { $("detail").innerHTML = `<p class="muted">${esc(err.message)}</p>`; }
+}
+async function decide(id, action) {
+  const note = $("note") ? $("note").value.trim() : "";
+  bill = await api(`/v1/sessions/${sid}/bill/${id}/review`, {method: "POST", body: JSON.stringify({action, note: note || null, by: "cashier"})});
+  render(); const next = bill.lines.find((l) => l.status === "verify" || l.status === "disputed"); show(next ? next.id : id);
+}
+$("session").onchange = () => select($("session").value);
+$("key").onchange = () => { try { localStorage.setItem("ss_key", JSON.stringify($("key").value)); } catch (e) {} refreshSessions(); };
+refreshSessions(); setInterval(refreshSessions, 4000);
+$("status").textContent = "exit desk"; $("dot").className = "dot live";
+</script>
+<script src="/static/nemotron.js"></script>
+</body>
+</html>

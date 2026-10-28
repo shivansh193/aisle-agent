@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aisle Agent · Cameras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/ledger.css">
+<style>
+  .steps { list-style:none; margin:22px 0 26px; padding:0; display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); border:1px solid var(--rule); border-radius:12px; overflow:hidden; background:var(--paper); }
+  .steps li { padding:16px 18px; border-right:1px solid var(--rule); }
+  .steps li:last-child { border-right:0; }
+  .steps .n { font:600 12px var(--mono); color:var(--green); }
+  .steps .n.now { color:var(--ink); }
+  @media (max-width: 900px) { .steps { grid-template-columns:repeat(2, minmax(0,1fr)); } .steps li { border-bottom:1px solid var(--rule); } }
+  .cam { display:flex; flex-wrap:wrap; gap:18px; align-items:center; background:var(--paper); border:1px solid var(--rule); border-radius:12px; padding:16px; }
+  .cam .shot { flex:0 0 200px; aspect-ratio:16/9; background:var(--screen); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#8A9099; font:12px var(--mono); }
+  .cam .body { flex:1 1 260px; min-width:0; display:flex; flex-direction:column; gap:6px; }
+  .modes { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .modes button { border:1px solid var(--edge); background:var(--card); border-radius:8px; padding:9px 12px; min-height:44px; font-weight:600; }
+  .modes button.sel { background:var(--ink); color:var(--ground); border-color:var(--ink); }
+  .how { margin:0; padding:0 0 0 20px; display:flex; flex-direction:column; gap:12px; color:var(--ink2); font-size:14px; }
+  .how b { color:var(--ink); }
+  code { font:12.5px var(--mono); background:var(--card); border:1px solid var(--rule); border-radius:6px; padding:2px 6px; word-break:break-all; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="in">
+    <a class="brand" href="/" aria-label="Aisle Agent home"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#17181A"/><path d="M8 10h12M8 14h12M8 18h7" stroke="#F3F1EA" stroke-width="2" stroke-linecap="round"/><circle cx="19.5" cy="18" r="1.8" fill="#8FD16A"/></svg><b>Aisle Agent</b><span class="sep"></span><span class="shop">Aisle demo</span></a>
+    <nav class="tabs" aria-label="Sections"><a href="/">Console</a><a href="/exit">Exit check<span class="badge" id="toCheck"></span></a><a href="/layout">Layout</a><a href="/cameras" aria-current="page">Cameras</a></nav>
+    <div class="topright"><span class="livepill"><span class="dot" id="dot"></span><span class="txt" id="status">idle</span></span></div>
+  </div>
+</header>
+
+<main class="page">
+  <div class="pagehead"><h1>Ring cameras</h1>
+    <div class="ctl"><label class="label" for="key" style="margin:0">Shop key</label><input class="field" id="key" type="password" style="width:180px"></div></div>
+  <p style="margin:6px 0 0; color:var(--ink2); max-width:720px">Your cameras stay in your Ring account. You approve Aisle Agent in the Ring app once; after that it can open a camera's live view and hear its motion alerts. Remove it from the Ring app to disconnect at any time.</p>
+
+  <ol class="steps" aria-label="Linking steps">
+    <li><div class="n" id="s1">1</div><b>Add Aisle Agent in the Ring app</b><div class="muted">Ring App Store, or a private pilot invite</div></li>
+    <li><div class="n" id="s2">2</div><b>Sign in to Aisle Agent</b><div class="muted">Ring sends you here to confirm the shop</div></li>
+    <li><div class="n" id="s3">3</div><b>Ring confirms the link</b><div class="muted">cameras and alerts are shared</div></li>
+    <li><div class="n now" id="s4">4</div><b>Choose what each camera watches</b><div class="muted">draw zones on the live view</div></li>
+  </ol>
+
+  <div class="cols">
+    <section class="main" aria-label="Accounts and cameras">
+      <div id="shops"></div>
+
+      <section class="card white" aria-labelledby="pg-h">
+        <div class="row"><div><h2 id="pg-h">Ring Developer Playground</h2><div class="muted">A simulated Ring camera with a real live view. No device needed.</div></div></div>
+        <div class="cols" style="gap:12px; margin-top:14px; align-items:flex-end">
+          <div style="flex:1 1 320px"><label class="label" for="pgToken">Playground token (valid 30 min)</label><input class="field" id="pgToken" type="password" placeholder="Generate it in the Ring Developer Console › Playground"></div>
+          <div><button class="btn ink" id="pgFind">Find cameras</button></div>
+        </div>
+        <div id="pgCams" style="display:flex; flex-direction:column; gap:12px; margin-top:14px"></div>
+      </section>
+    </section>
+
+    <aside class="side">
+      <section class="card" aria-labelledby="how-h">
+        <h2 id="how-h" style="margin-bottom:12px">How the video gets here</h2>
+        <ol class="how">
+          <li><b>Motion.</b> The camera sees movement and Ring sends a signed alert, checked before anything happens.</li>
+          <li><b>Live view.</b> Aisle Agent opens the camera's live view on its server (WebRTC). Ring ends each view after 60 s on wired cameras and 30 s on battery ones; while shoppers are in frame, the next one opens.</li>
+          <li><b>Only what changes the bill.</b> Hands at a shelf zone are checked before and after: a take adds a line, a put-back flags one.</li>
+          <li><b>Nothing is kept.</b> Frames are analysed and dropped. Only the crops behind each bill line are kept, for the exit check.</li>
+        </ol>
+        <p class="muted" style="margin:16px 0 0; padding-top:14px; border-top:1px solid var(--rule)">Cameras with end-to-end encryption turned on can't be used: Ring doesn't share their video with any app.</p>
+      </section>
+      <section class="card" id="setup" style="display:none" aria-labelledby="setup-h">
+        <h2 id="setup-h" style="margin-bottom:8px">Register Aisle Agent with Ring</h2>
+        <p class="muted" style="margin:0 0 10px">Not set up on this server yet. In the Ring Developer Portal, create a private app (up to 5 accounts, no certification) and enter:</p>
+        <div class="label">Token exchange URL</div><code id="u1"></code>
+        <div class="label" style="margin-top:10px">Account link URL</div><code id="u2"></code>
+        <div class="label" style="margin-top:10px">Webhook URL</div><code id="u3"></code>
+        <p class="muted" style="margin:12px 0 0">Then add RING_CLIENT_ID, RING_CLIENT_SECRET and RING_HMAC_KEY to the server's secrets.</p>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const store = {get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+               set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }};
+$("key").value = store.get("ss_key", "");
+const headers = (extra = {}) => Object.assign($("key").value ? {Authorization: `Bearer ${$("key").value}`} : {}, extra);
+let modes = store.get("ss_cam_modes", {});
+const MODES = [["off", "Off"], ["on_motion", "On motion"], ["continuous", "Continuously"]];
+
+function camCard(dev, shop) {
+  const m = modes[dev.id] || "on_motion";
+  const div = document.createElement("article"); div.className = "cam";
+  const state = m === "off" ? ["not watching", "var(--muted)"] : m === "on_motion" ? ["watching on motion", "var(--green)"] : ["watching continuously", "var(--green)"];
+  div.innerHTML = `<div class="shot">${dev.online === false ? "offline" : "[snapshot]"}</div>
+    <div class="body"><div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap"><h3 style="margin:0;font-size:17px">${esc(dev.name)}</h3>
+      <span class="mono" style="font-size:12px;color:${state[1]}">${state[0]}</span></div>
+      <div class="mono muted">${esc(dev.id.slice(0, 26))}…</div>
+      <div class="modes" role="group" aria-label="When to watch">${MODES.map(([k, l]) => `<button data-m="${k}" class="${k === m ? "sel" : ""}">${l}</button>`).join("")}</div></div>
+    <div><button class="btn ink" data-open>Open live view</button></div>`;
+  div.querySelectorAll("button[data-m]").forEach((b) => b.onclick = () => { modes[dev.id] = b.dataset.m; store.set("ss_cam_modes", modes); div.replaceWith(camCard(dev, shop)); });
+  div.querySelector("[data-open]").onclick = () => {
+    const mode = (modes[dev.id] || "on_motion") === "off" ? "now" : (modes[dev.id] || "on_motion");
+    sessionStorage.setItem("ss_ring_open", JSON.stringify({device: dev.id, name: dev.name, shop: shop || "", mode}));
+    location.href = "/?source=ring";
+  };
+  return div;
+}
+async function devicesFor(shop, token) {
+  const r = await fetch(`/v1/ring/devices${shop ? "?shop=" + encodeURIComponent(shop) : ""}`, {headers: headers(token ? {"X-Ring-Token": token} : {})});
+  const body = await r.json(); if (!r.ok) throw new Error(body.detail || r.status); return body.devices;
+}
+async function load() {
+  const r = await fetch("/v1/ring/accounts", {headers: headers()});
+  if (r.status === 401) { $("shops").innerHTML = '<div class="card">Enter this shop\'s key above to see linked Ring accounts.</div>'; return; }
+  const {configured, shops} = await r.json();
+  $("setup").style.display = configured ? "none" : "block";
+  ["u1", "u2", "u3"].forEach((id, i) => $(id).textContent = location.origin + ["/ring/oauth/token", "/ring/link", "/v1/ring/webhook"][i]);
+  const done = shops.length > 0;
+  ["s1", "s2", "s3"].forEach((id, i) => $(id).textContent = `${i + 1}${done ? " · done" : ""}`);
+  $("s4").textContent = done ? "4 · now" : "4";
+  $("shops").innerHTML = shops.length ? "" : '<section class="card" style="margin-bottom:0"><h2>No linked Ring account yet</h2><p class="muted" style="margin:6px 0 0">Add Aisle Agent in the Ring app to link one. Until then, use the Playground below.</p></section>';
+  for (const s of shops) {
+    const sec = document.createElement("section"); sec.style.cssText = "display:flex;flex-direction:column;gap:12px";
+    sec.innerHTML = `<div class="card white row"><div><h2>${esc(s.name)}</h2><div class="mono muted">${esc(s.account_identifier)} · linked ${new Date(s.linked_at * 1000).toLocaleDateString()}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-find>Find cameras</button><button class="btn danger" data-forget>Forget here</button></div></div><div data-cams style="display:flex;flex-direction:column;gap:12px"></div>`;
+    const list = sec.querySelector("[data-cams]");
+    const find = async () => { list.innerHTML = '<div class="muted">Asking Ring…</div>';
+      try { const devs = await devicesFor(s.shop_id); list.innerHTML = devs.length ? "" : '<div class="muted">No cameras shared with Aisle Agent.</div>'; devs.forEach((d) => list.appendChild(camCard(d, s.shop_id))); }
+      catch (e) { list.innerHTML = `<div class="muted" style="color:var(--red)">${esc(e.message)}</div>`; } };
+    sec.querySelector("[data-find]").onclick = find;
+    sec.querySelector("[data-forget]").onclick = async () => { if (!confirm(`Forget ${s.name} on this server? To revoke access at Ring, remove Aisle Agent in the Ring app.`)) return;
+      await fetch(`/v1/ring/accounts/${s.shop_id}`, {method: "DELETE", headers: headers()}); load(); };
+    $("shops").appendChild(sec); find();
+  }
+}
+$("pgFind").onclick = async () => {
+  const token = $("pgToken").value.trim(); if (!token) return;
+  sessionStorage.setItem("ss_ring_token", token);
+  $("pgCams").innerHTML = '<div class="muted">Asking Ring…</div>';
+  try { const devs = await devicesFor("", token); $("pgCams").innerHTML = ""; devs.forEach((d) => $("pgCams").appendChild(camCard(d, ""))); }
+  catch (e) { $("pgCams").innerHTML = `<div class="muted" style="color:var(--red)">${esc(e.message)}</div>`; }
+};
+$("pgToken").value = sessionStorage.getItem("ss_ring_token") || "";
+$("key").onchange = () => { store.set("ss_key", $("key").value); load(); };
+async function refreshBadge() { try { const r = await fetch("/v1/sessions", {headers: headers()}); if (!r.ok) return;
+  const n = (await r.json()).sessions.reduce((s, x) => s + x.to_verify, 0); $("toCheck").textContent = n ? String(n) : ""; } catch (e) {} }
+load(); refreshBadge(); setInterval(refreshBadge, 5000);
+$("status").textContent = "online"; $("dot").className = "dot live";
+</script>
+</body>
+</html>

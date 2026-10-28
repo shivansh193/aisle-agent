@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aisle Agent · Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/ledger.css">
+</head>
+<body>
+<header class="top">
+  <div class="in">
+    <a class="brand" href="/" aria-label="Aisle Agent home"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#17181A"/><path d="M8 10h12M8 14h12M8 18h7" stroke="#F3F1EA" stroke-width="2" stroke-linecap="round"/><circle cx="19.5" cy="18" r="1.8" fill="#8FD16A"/></svg><b>Aisle Agent</b><span class="sep"></span><span class="shop">Aisle demo</span></a>
+    <nav class="tabs" aria-label="Sections"><a href="/" aria-current="page">Console</a><a href="/exit">Exit check<span class="badge" id="toCheck"></span></a><a href="/layout">Layout</a><a href="/cameras">Cameras</a></nav>
+    <div class="topright"><span class="livepill"><span class="dot" id="dot"></span><span class="txt" id="status">idle</span></span></div>
+  </div>
+</header>
+
+<main class="page cols">
+  <section class="main">
+    <div class="pagehead reveal">
+      <h1 id="srcTitle">This device</h1>
+      <span class="status idle" id="liveTxt"><span class="dot" id="dot2"></span>not running</span>
+      <span class="mono muted" id="srcMeta"></span>
+      <div class="ctl">
+        <div class="seg" id="srcSeg" role="group" aria-label="Camera source"><button data-src="device" class="sel">This device</button><button data-src="ring">Ring camera</button></div>
+        <button class="btn ink" id="start">Start</button>
+        <button class="btn line" id="stop">Stop</button>
+      </div>
+    </div>
+
+    <figure class="feed reveal" id="feed">
+      <video id="video" playsinline muted autoplay></video>
+      <img id="remote" alt="Live camera feed">
+      <canvas id="overlay"></canvas>
+      <div class="empty" id="empty"><b>No feed yet</b><span>Pick a source and press Start. Draw your shelf zones on the picture once it's live.</span></div>
+      <div class="hud tr"><span><span id="fps">–</span> fps analysed</span><span><span id="nShop">0</span> shoppers</span><span>take → bill <span id="lat">–</span></span></div>
+      <figcaption class="hud bl"><span id="srcChip">this device</span></figcaption>
+    </figure>
+
+    <div class="card reveal" id="srcDevice" style="display:none">
+      <div class="cols" style="gap:16px">
+        <div style="flex:1 1 240px"><label class="label" for="transport">Transport</label>
+          <select class="field" id="transport"><option value="auto">Auto: WebRTC, falls back to WebSocket</option><option value="webrtc">WebRTC</option><option value="ws">WebSocket frames</option></select></div>
+        <div style="flex:1 1 240px"><label class="label" for="key">Shop key</label><input class="field" id="key" type="password" placeholder="Aisle Agent key for this shop"></div>
+      </div>
+    </div>
+    <div class="card reveal" id="srcRing" style="display:none">
+      <div class="cols" style="gap:16px; align-items:flex-end">
+        <div style="flex:1 1 220px"><label class="label" for="ringShop">Ring account</label>
+          <select class="field" id="ringShop"><option value="">Playground / token below</option></select></div>
+        <div style="flex:1 1 220px" id="tokenBox"><label class="label" for="ringToken">Ring access token</label><input class="field" id="ringToken" type="password" placeholder="Playground token"></div>
+        <div style="flex:0 0 auto"><button class="btn" id="findCams">Find cameras</button></div>
+        <div style="flex:1 1 200px"><label class="label" for="ringDevice">Camera</label><select class="field" id="ringDevice"><option value="">—</option></select></div>
+        <div style="flex:1 1 180px"><label class="label" for="ringMode">Watch</label>
+          <select class="field" id="ringMode"><option value="now">Now (one live view)</option><option value="on_motion">On motion</option><option value="continuous">Continuously</option></select></div>
+      </div>
+      <p class="muted" style="margin:12px 0 0">Ring ends each live view after 60 s (wired) or 30 s (battery). "On motion" reopens it while shoppers are in frame.</p>
+    </div>
+
+    <div class="card reveal" aria-label="Last 60 seconds">
+      <div class="row mono muted" style="font-size:12px; margin-bottom:10px"><span>LAST 60 S</span><span>now</span></div>
+      <div class="tape" id="tape"></div>
+    </div>
+
+    <section class="card reveal" aria-labelledby="shelves-h">
+      <div class="row" style="margin-bottom:6px">
+        <h2 id="shelves-h">Shelves</h2>
+        <button class="btn" id="draw">Draw a zone on the feed</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th scope="col">ZONE</th><th scope="col">STOCKED WITH</th><th scope="col">STOCK</th><th scope="col" style="text-align:right">TAKES</th><th scope="col"><span class="sr" style="position:absolute;left:-9999px">Remove</span></th></tr></thead>
+          <tbody id="zones"></tbody>
+        </table>
+      </div>
+      <div id="zoneForm" style="display:none; margin-top:14px; border-top:1px solid var(--rule2); padding-top:14px">
+        <label class="label" for="zoneName">New zone</label>
+        <input class="field" id="zoneName" placeholder="e.g. Dairy shelf" style="max-width:360px" list="layoutZones">
+        <datalist id="layoutZones"></datalist>
+        <div class="muted" style="margin:12px 0 6px">Products stocked here</div>
+        <div id="zoneSkus" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:6px"></div>
+        <div style="display:flex; gap:8px; margin-top:12px"><button class="btn ink" id="zoneSave">Save zone</button><button class="btn" id="zoneCancel">Cancel</button></div>
+      </div>
+    </section>
+
+    <details class="card reveal">
+      <summary>Products and photos <span class="muted" style="font-weight:400">One clear photo per product names it best</span></summary>
+      <div id="photos" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:16px"><label class="label" for="catalogue" style="margin:0">Catalogue (JSON)</label>
+        <button class="btn" id="fromLayout" style="min-height:34px; padding:5px 11px">Use the shop layout</button></div>
+      <textarea class="field mono" id="catalogue" style="height:160px; font-size:12px"></textarea>
+    </details>
+  </section>
+
+  <aside class="side">
+    <section class="card white reveal" aria-labelledby="bill-h">
+      <div class="row" style="align-items:baseline"><h2 id="bill-h">Bill</h2><span class="mono muted" id="rMeta">no session</span></div>
+      <div class="ledger" id="lines"><p class="muted" style="margin:14px 0 4px">Nothing taken yet. Lines appear the moment a take is confirmed.</p></div>
+      <div class="total"><b>Total</b><span class="v" id="total">₹0</span></div>
+      <p class="muted" style="margin:10px 0 0">Flagged lines are settled at the exit. Nothing is charged or removed without a person.</p>
+      <div id="phone" class="phonebox" hidden>
+        <div id="qr" aria-hidden="true"></div>
+        <div><b>On the shopper's phone</b><p class="muted" style="margin:4px 0 8px">Scan to follow this bill live and tap "Not mine" on anything that isn't theirs.</p>
+          <a id="phoneLink" class="mono" target="_blank" rel="noopener">open the shopper's view</a></div>
+      </div>
+    </section>
+    <div id="assistantMount"></div>
+    <section class="card reveal" aria-labelledby="ev-h">
+      <div class="row"><h2 id="ev-h">What it saw</h2><span class="mono muted" id="evCount"></span></div>
+      <ol class="events" id="log"></ol>
+    </section>
+  </aside>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = (n) => "₹" + Number(n).toLocaleString("en-IN");
+const cap = (s) => { s = String(s ?? ""); return s.charAt(0).toUpperCase() + s.slice(1); };
+const C = {green:"#1D6B42", amber:"#A85A00", red:"#B42318", muted:"#5B5F66", rule:"#DAD5C8", zone:"#E9A23B", hand:"#8FD16A"};
+const DEFAULT_CATALOGUE = [
+  {sku: "maggi-70", name: "packet of instant noodles", price: 14},
+  {sku: "parle-g", name: "packet of biscuits", price: 10},
+  {sku: "amul-milk", name: "carton of milk", price: 68},
+  {sku: "fortune-oil", name: "bottle of cooking oil", price: 180},
+  {sku: "colgate", name: "tube of toothpaste", price: 99},
+  {sku: "dettol", name: "bottle of handwash or soap", price: 120},
+  {sku: "coke-750", name: "bottle of soft drink", price: 40},
+  {sku: "lays", name: "bag of chips", price: 20},
+];
+const store = {get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+               set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }};
+$("key").value = store.get("ss_key", "");
+$("catalogue").value = JSON.stringify(store.get("ss_catalogue", DEFAULT_CATALOGUE), null, 1);
+let zones = store.get("ss_zones", []), photos = store.get("ss_photos", {}), source = store.get("ss_source", "device");
+let session = null, pc = null, ingestWs = null, eventsWs = null, stream = null, sendTimer = null;
+let shoppers = [], hands = [], flashes = [], stateCount = 0, lastState = 0, stock = {}, takes = {}, evN = 0, seenLines = new Set(), tape = [];
+let drawing = false, dragStart = null, dragNow = null, pendingBox = null;
+
+const q = () => $("key").value ? `?key=${encodeURIComponent($("key").value)}` : "";
+const qa = () => $("key").value ? `&key=${encodeURIComponent($("key").value)}` : "";
+const headers = (extra = {}) => Object.assign($("key").value ? {Authorization: `Bearer ${$("key").value}`} : {}, extra);
+const ringHeaders = (extra = {}) => headers(Object.assign(extra, $("ringToken").value && !$("ringShop").value ? {"X-Ring-Token": $("ringToken").value} : {}));
+const wsUrl = (path) => `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${path}${q()}`;
+const catalogue = () => JSON.parse($("catalogue").value);
+const productName = (sku) => { try { return (catalogue().find((p) => p.sku === sku) || {}).name || sku; } catch (e) { return sku; } };
+function setStatus(text, kind = "") {
+  $("status").textContent = text; $("dot").className = "dot " + kind; $("dot2").className = "dot " + kind;
+  $("liveTxt").className = "status " + (kind === "live" ? "" : kind === "warn" ? "warn" : "idle");
+  $("liveTxt").lastChild.textContent = kind === "live" ? "live" : text;
+}
+function log(text, kind = "", label = "") {
+  const li = document.createElement("li");
+  li.innerHTML = `<time>${new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})}</time><span>${label ? `<b class="k-${kind}">${esc(label)}</b> ` : ""}${esc(text)}</span>`;
+  $("log").prepend(li); evN++; $("evCount").textContent = `${evN}`;
+  while ($("log").children.length > 80) $("log").lastChild.remove();
+  if (["take", "put", "touch", "restock"].includes(kind)) { tape.push({t: Date.now(), kind, label: label || kind}); renderTape(); }
+}
+function renderTape() {
+  const now = Date.now(); tape = tape.filter((m) => now - m.t < 60000);
+  const col = {take: C.green, put: C.amber, restock: C.red, touch: "#8A9099"}, h = {take: 26, put: 30, restock: 34, touch: 16};
+  $("tape").innerHTML = tape.map((m) => { const left = (100 - (now - m.t) / 600).toFixed(2) + "%";
+    return `<i style="left:${left};height:${h[m.kind]}px;background:${col[m.kind]}"></i><em style="left:${left};bottom:${h[m.kind]}px;color:${col[m.kind]}">${esc(m.label)}</em>`; }).join("");
+}
+setInterval(renderTape, 1000);
+
+// ---------------------------------------------------------------- source
+function setSource(s) {
+  source = s; store.set("ss_source", s);
+  document.querySelectorAll("#srcSeg button").forEach((b) => b.classList.toggle("sel", b.dataset.src === s));
+  $("srcDevice").style.display = s === "device" ? "block" : "none";
+  $("srcRing").style.display = s === "ring" ? "block" : "none";
+  $("srcTitle").textContent = s === "ring" ? ($("ringDevice").selectedOptions[0]?.textContent || "Ring camera") : "This device";
+  $("srcChip").textContent = s === "ring" ? "Ring live view · WebRTC (WHEP)" : "this device";
+}
+document.querySelectorAll("#srcSeg button").forEach((b) => b.onclick = () => setSource(b.dataset.src));
+async function loadShops() {
+  try {
+    const r = await fetch("/v1/ring/accounts", {headers: headers()}); if (!r.ok) return;
+    const {shops} = await r.json();
+    $("ringShop").innerHTML = '<option value="">Playground / token below</option>' + shops.map((s) => `<option value="${esc(s.shop_id)}">${esc(s.name)} · ${esc(s.account_identifier)}</option>`).join("");
+    const pre = new URLSearchParams(location.search);
+    if (pre.get("shop")) $("ringShop").value = pre.get("shop");
+    $("tokenBox").style.display = $("ringShop").value ? "none" : "block";
+  } catch (e) {}
+}
+$("ringShop").onchange = () => { $("tokenBox").style.display = $("ringShop").value ? "none" : "block"; };
+$("findCams").onclick = async () => {
+  try {
+    const shop = $("ringShop").value;
+    const r = await fetch(`/v1/ring/devices${shop ? "?shop=" + encodeURIComponent(shop) : ""}`, {headers: ringHeaders()});
+    const body = await r.json(); if (!r.ok) throw new Error(body.detail || r.status);
+    $("ringDevice").innerHTML = body.devices.map((d) => `<option value="${esc(d.id)}">${esc(d.name)}${d.online === false ? " (offline)" : ""}</option>`).join("") || '<option value="">no cameras shared</option>';
+    log(`${body.devices.length} camera(s) found`, "", "Ring"); setSource("ring");
+  } catch (e) { log(e.message, "err", "Ring"); }
+};
+$("ringDevice").onchange = () => setSource("ring");
+
+// ---------------------------------------------------------------- zones
+function renderZones() {
+  if (!zones.length) { $("zones").innerHTML = '<tr><td colspan="5" class="muted">No zones yet. Press "Draw a zone on the feed" and drag over a shelf.</td></tr>'; return; }
+  $("zones").innerHTML = zones.map((z, i) => {
+    const st = stock[z.id], lv = st ? st.level : null;
+    const n = lv === null ? 0 : lv < 0.3 ? 1 : lv < 0.58 ? 2 : lv < 0.8 ? 3 : 4;
+    const c = n <= 1 ? C.red : n === 2 ? C.amber : C.green;
+    const label = !st ? "waiting" : st.alert ? "restock" : st.label;
+    return `<tr><td style="font-weight:700">${esc(z.id)}</td><td style="color:var(--ink2)">${z.skus.map((s) => esc(productName(s))).join(", ") || "any product"}</td>
+      <td><div style="display:flex;align-items:center;gap:10px"><div class="meter" aria-hidden="true">${[0, 1, 2, 3].map((k) => `<span style="background:${k < n ? c : C.rule}"></span>`).join("")}</div>
+        <span class="mono" style="font-size:12px;font-weight:600;color:${st ? c : C.muted}">${esc(label)}</span></div></td>
+      <td class="mono" style="text-align:right">${takes[z.id] || 0}</td><td style="text-align:right"><button class="linkbtn" data-i="${i}">remove</button></td></tr>`;
+  }).join("");
+  $("zones").querySelectorAll("button[data-i]").forEach((b) => b.onclick = () => { zones.splice(+b.dataset.i, 1); saveZones(); });
+}
+async function saveZones() {
+  store.set("ss_zones", zones); renderZones();
+  if (session) { const r = await fetch(`/v1/sessions/${session.session_id}/zones`, {method: "PUT", headers: headers({"Content-Type": "application/json"}), body: JSON.stringify(zones)});
+    if (!r.ok) log(await r.text(), "err", "zones"); }
+}
+function media() { return $("remote").style.display === "block" ? $("remote") : $("video"); }
+function mediaRect() {
+  const cv = $("overlay"), m = media(); const vw = m.videoWidth || m.naturalWidth || 16, vh = m.videoHeight || m.naturalHeight || 9;
+  const s = Math.min(cv.clientWidth / vw, cv.clientHeight / vh), W = vw * s, H = vh * s;
+  return {ox: (cv.clientWidth - W) / 2, oy: (cv.clientHeight - H) / 2, W, H};
+}
+function toFrac(ev) { const r = $("overlay").getBoundingClientRect(), m = mediaRect();
+  return [Math.min(1, Math.max(0, (ev.clientX - r.left - m.ox) / m.W)), Math.min(1, Math.max(0, (ev.clientY - r.top - m.oy) / m.H))]; }
+$("draw").onclick = () => { drawing = !drawing; $("draw").classList.toggle("on", drawing); $("draw").textContent = drawing ? "Drag over a shelf…" : "Draw a zone on the feed"; };
+$("overlay").addEventListener("pointerdown", (e) => { if (!drawing) return; e.preventDefault(); dragStart = dragNow = toFrac(e); try { $("overlay").setPointerCapture(e.pointerId); } catch (err) {} });
+window.addEventListener("pointermove", (e) => { if (dragStart) dragNow = toFrac(e); });
+window.addEventListener("pointerup", (e) => {
+  if (!dragStart) return; dragNow = toFrac(e); const [a, b] = [dragStart, dragNow]; dragStart = null;
+  const box = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])].map((v) => +v.toFixed(4));
+  if (box[2] - box[0] < 0.03 || box[3] - box[1] < 0.03) return;
+  pendingBox = box; drawing = false; $("draw").classList.remove("on"); $("draw").textContent = "Draw a zone on the feed";
+  $("zoneName").value = `Shelf ${zones.length + 1}`;
+  $("zoneSkus").innerHTML = catalogue().map((p) => `<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" value="${esc(p.sku)}"> ${esc(p.name)} <span class="mono muted">${fmt(p.price)}</span></label>`).join("");
+  $("zoneForm").style.display = "block"; $("zoneName").focus();
+});
+let layoutZones = store.get("ss_layout_zones", {});
+function fillZoneList() { $("layoutZones").innerHTML = Object.keys(layoutZones).map((z) => `<option value="${esc(z)}">`).join(""); }
+fillZoneList();
+$("zoneName").addEventListener("input", () => {     // a zone named after a layout shelf gets that shelf's products
+  const key = Object.keys(layoutZones).find((z) => z.toLowerCase() === $("zoneName").value.trim().toLowerCase());
+  if (key) $("zoneSkus").querySelectorAll("input").forEach((i) => i.checked = layoutZones[key].includes(i.value));
+});
+$("fromLayout").onclick = async () => {
+  try {
+    const r = await fetch("/v1/layout/catalogue", {headers: headers()});
+    if (!r.ok) throw new Error(r.status === 401 ? "enter the shop key first" : `layout: ${r.status}`);
+    const lay = await r.json();
+    if (!lay.products.length) throw new Error("the shop layout has no products yet");
+    $("catalogue").value = JSON.stringify(lay.products, null, 1); store.set("ss_catalogue", lay.products);
+    layoutZones = lay.zones; store.set("ss_layout_zones", layoutZones); fillZoneList();
+    log(`catalogue: ${lay.products.length} products from the shop layout`); if (typeof renderPhotos === "function") renderPhotos();
+  } catch (e) { setStatus(e.message, "warn"); }
+};
+$("zoneSave").onclick = () => { const skus = [...$("zoneSkus").querySelectorAll("input:checked")].map((i) => i.value);
+  zones.push({id: $("zoneName").value.trim() || `Shelf ${zones.length + 1}`, box: pendingBox, skus}); pendingBox = null; $("zoneForm").style.display = "none"; saveZones(); };
+$("zoneCancel").onclick = () => { pendingBox = null; $("zoneForm").style.display = "none"; };
+
+// ---------------------------------------------------------------- products
+function shrink(src, max = 384) { return new Promise((res) => { const img = new Image(); img.onload = () => {
+  const s = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement("canvas"); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL("image/jpeg", 0.85)); }; img.src = src; }); }
+function cameraSnap() { const v = $("video"); if (!v.videoWidth) return null; const side = Math.min(v.videoWidth, v.videoHeight) * 0.6, c = document.createElement("canvas"); c.width = c.height = 384;
+  c.getContext("2d").drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, 384, 384); return c.toDataURL("image/jpeg", 0.85); }
+function addPhoto(sku, url) { (photos[sku] = photos[sku] || []).push(url); store.set("ss_photos", photos); renderPhotos(); }
+function renderPhotos() {
+  let cat = []; try { cat = catalogue(); } catch (e) {}
+  $("photos").innerHTML = "";
+  for (const p of cat) {
+    const row = document.createElement("div"); row.className = "prod";
+    row.innerHTML = `<div><div style="font-weight:600">${esc(p.name)}</div><div class="mono muted">${fmt(p.price)} · ${(photos[p.sku] || []).length} photo(s)</div></div><div class="thumbs">${(photos[p.sku] || []).slice(0, 4).map((u) => `<img src="${u}" alt="">`).join("")}</div>`;
+    const ctl = document.createElement("div"); ctl.style.cssText = "display:flex;gap:14px";
+    const file = Object.assign(document.createElement("input"), {type: "file", accept: "image/*"}); file.capture = "environment"; file.hidden = true;
+    file.onchange = async () => { const f = file.files[0]; if (f) addPhoto(p.sku, await shrink(URL.createObjectURL(f))); };
+    const mk = (t, fn) => Object.assign(document.createElement("button"), {className: "linkbtn", textContent: t, onclick: fn});
+    ctl.append(mk("add photo", () => file.click()), mk("from camera", () => { const u = cameraSnap(); if (!u) return log("start this device's camera and hold the product in the middle", "err"); addPhoto(p.sku, u); }),
+      mk("clear", () => { delete photos[p.sku]; store.set("ss_photos", photos); renderPhotos(); }), file);
+    row.appendChild(ctl); $("photos").appendChild(row);
+  }
+}
+$("catalogue").addEventListener("change", () => { renderPhotos(); renderZones(); });
+
+// ---------------------------------------------------------------- session
+async function start() {
+  if (session) await stop();
+  store.set("ss_key", $("key").value);
+  let cat; try { cat = catalogue(); store.set("ss_catalogue", cat); } catch (e) { setStatus("catalogue is not valid JSON", "warn"); return; }
+  if (source === "device") {
+    setStatus("starting camera…");
+    stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment", width: 1280, height: 720}, audio: false});
+    $("video").srcObject = stream; $("video").style.display = "block"; $("remote").style.display = "none";
+  }
+  const r = await fetch("/v1/sessions", {method: "POST", headers: headers({"Content-Type": "application/json"}),
+    body: JSON.stringify({catalogue: cat.map((p) => Object.assign({}, p, {images: photos[p.sku] || []})), zones})});
+  if (!r.ok) { setStatus(`couldn't start (${r.status})`, "warn"); log(await r.text(), "err"); return; }
+  session = await r.json(); seenLines = new Set(); stock = {}; takes = {};
+  $("rMeta").textContent = `${session.session_id} · ${new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}`;
+  $("empty").style.display = "none"; log(`session started (${session.mode})`);
+  openEvents();
+  showPhone();
+  if (source === "ring") return startRing();
+  const mode = $("transport").value;
+  if (mode === "ws") return startWs();
+  const ok = await startWebrtc().catch((e) => { console.warn(e); return false; });
+  if (!ok && mode === "auto") { log("WebRTC did not connect, using WebSocket frames"); startWs(); }
+}
+async function startRing() {
+  const device_id = $("ringDevice").value; if (!device_id) { setStatus("find and pick a camera first", "warn"); return; }
+  const mode = $("ringMode").value, shop = $("ringShop").value || undefined;
+  const r = await fetch(`/v1/sessions/${session.session_id}/ring`, {method: "POST", headers: ringHeaders({"Content-Type": "application/json"}), body: JSON.stringify({device_id, start: mode, shop})});
+  const body = await r.json(); if (!r.ok) { setStatus("Ring live view failed", "warn"); log(body.detail, "err", "Ring"); return; }
+  showRemote(); setStatus(mode === "on_motion" ? "armed · waiting for motion" : "Ring live view", mode === "on_motion" ? "warn" : "live");
+  $("srcMeta").textContent = "Ring · WebRTC";
+}
+function showRemote() { $("video").style.display = "none"; const img = $("remote"); img.style.display = "block"; img.src = `/v1/sessions/${session.session_id}/preview.mjpg?fps=10${qa()}`; }
+async function startWebrtc() {
+  setStatus("connecting…");
+  const ice = await (await fetch("/v1/ice", {headers: headers()})).json();
+  pc = new RTCPeerConnection({iceServers: ice.iceServers});
+  stream.getVideoTracks().forEach((t) => pc.addTransceiver(t, {direction: "sendonly"}));
+  await pc.setLocalDescription(await pc.createOffer());
+  await new Promise((res) => { if (pc.iceGatheringState === "complete") return res(); pc.addEventListener("icegatheringstatechange", () => pc.iceGatheringState === "complete" && res()); setTimeout(res, 3000); });
+  const r = await fetch(session.whip_url, {method: "POST", headers: headers({"Content-Type": "application/sdp"}), body: pc.localDescription.sdp});
+  if (!r.ok) throw new Error(`WHIP ${r.status}`);
+  await pc.setRemoteDescription({type: "answer", sdp: await r.text()});
+  return await new Promise((res) => { const t = setTimeout(() => res(false), 8000);
+    pc.addEventListener("connectionstatechange", () => { if (pc.connectionState === "connected") { clearTimeout(t); setStatus("live · WebRTC", "live"); $("srcMeta").textContent = "WebRTC · 1280×720"; res(true); }
+      if (pc.connectionState === "failed") { clearTimeout(t); res(false); } }); });
+}
+function startWs() {
+  if (pc) { pc.close(); pc = null; }
+  ingestWs = new WebSocket(wsUrl(session.ingest_ws)); const c = document.createElement("canvas"), v = $("video");
+  ingestWs.onopen = () => { setStatus("live · WebSocket", "live"); $("srcMeta").textContent = "WebSocket frames · 960 px";
+    sendTimer = setInterval(() => { if (ingestWs.readyState !== 1 || ingestWs.bufferedAmount > 0 || !v.videoWidth) return;
+      const w = Math.min(960, v.videoWidth), h = Math.round(w * v.videoHeight / v.videoWidth); c.width = w; c.height = h; c.getContext("2d").drawImage(v, 0, 0, w, h);
+      c.toBlob((b) => b && ingestWs.readyState === 1 && ingestWs.send(b), "image/jpeg", 0.8); }, 125); };
+  ingestWs.onclose = () => setStatus("ingest closed", "warn");
+}
+function openEvents() {
+  eventsWs = new WebSocket(wsUrl(session.events_ws));
+  eventsWs.onmessage = (m) => {
+    const e = JSON.parse(m.data), p = (x) => x === null || x === undefined ? "–" : x.toFixed(2);
+    if (e.type === "state") { shoppers = e.shoppers; hands = e.hands || []; stateCount++; $("nShop").textContent = shoppers.length;
+      const now = performance.now(); if (now - lastState > 1000) { $("fps").textContent = stateCount; stateCount = 0; lastState = now; } }
+    else if (e.type === "line") { $("lat").textContent = `${e.latency_s.toFixed(2)} s`;
+      if (e.line.box) flashes.push({box: e.line.box, label: e.line.name, until: performance.now() + 1800});
+      log(`${cap(e.line.name)} · conf ${e.line.confidence.toFixed(2)}`, "take", "bill +"); }
+    else if (e.type === "take" || e.type === "put" || e.type === "touch") {
+      if (e.type === "take" && e.zone) { takes[e.zone] = (takes[e.zone] || 0) + 1; renderZones(); }
+      log(`${e.zone || ""} · holding ${p(e.p_before)} → ${p(e.p_after)}`, e.type, e.type === "put" ? "put back" : e.type); }
+    else if (e.type === "stock") { stock[e.zone] = Object.assign(stock[e.zone] || {}, {level: e.level, label: e.label}); renderZones(); }
+    else if (e.type === "restock" || e.type === "restocked") { stock[e.zone] = Object.assign(stock[e.zone] || {}, {alert: e.type === "restock"}); renderZones();
+      log(e.type === "restock" ? `${e.zone} is running empty` : `${e.zone} restocked`, "restock", e.type); }
+    else if (e.type === "ring_stream") { log(`live view ${e.state}${e.frames ? " · " + e.frames + " frames" : ""}`, "", "Ring");
+      if (e.state === "started") { showRemote(); setStatus("Ring live view", "live"); }
+      if (e.state === "ended") setStatus("live view ended", "warn"); }
+    else if (e.type === "ring_event") log(`${e.sub_type || ""} ${e.type.replace("ring_", "")}`, "", "Ring");
+    else if (e.type === "error") log(e.message, "err", "error");
+    if (e.bill) renderBill(e.bill);
+  };
+}
+function showPhone() {
+  if (!session.shopper_url) return;
+  const url = location.origin + session.shopper_url;
+  $("phoneLink").href = url; $("qr").innerHTML = ""; $("phone").hidden = false;
+  if (window.QRCode) new QRCode($("qr"), {text: url, width: 104, height: 104, colorDark: "#17181A", colorLight: "#FFFFFF", correctLevel: QRCode.CorrectLevel.M});
+}
+function renderBill(bill) {
+  if (!bill.lines.length) return;
+  $("lines").innerHTML = bill.lines.map((l) => {
+    const fresh = !seenLines.has(l.id); seenLines.add(l.id);
+    const flag = l.status === "verify" ? `<span class="flag">verify at exit${l.note ? " · " + esc(l.note) : ""}</span>` : l.status === "disputed" ? '<span class="flag red">disputed</span>' : l.status === "removed" ? '<span class="flag red">removed at exit</span>' : "";
+    const mine = ["ok", "verify", "approved"].includes(l.status) ? `<button class="linkbtn" data-id="${l.id}">not mine</button>` : "";
+    return `<div class="ln ${l.status}" style="${fresh ? "" : "animation:none"}"><div class="row" style="flex-wrap:nowrap"><span class="nm" style="font-weight:600">${esc(cap(l.name))}</span><span class="pr mono" style="font-weight:600">${fmt(l.price)}</span></div>
+      <div class="meta"><span>conf ${l.confidence.toFixed(2)}${l.zone ? " · " + esc(l.zone) : ""}${l.seen > 1 ? ` · picked up ${l.seen}×, counted once` : ""}</span>${flag}${mine}</div></div>`; }).join("");
+  $("lines").querySelectorAll("button[data-id]").forEach((b) => b.onclick = () => fetch(`/v1/sessions/${session.session_id}/bill/${b.dataset.id}/dispute`, {method: "POST", headers: headers()}));
+  $("total").textContent = fmt(bill.total);
+}
+
+// ---------------------------------------------------------------- overlay
+function draw() {
+  const cv = $("overlay"), ctx = cv.getContext("2d"), dpr = window.devicePixelRatio || 1;
+  cv.width = cv.clientWidth * dpr; cv.height = cv.clientHeight * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cv.clientWidth, cv.clientHeight);
+  const {ox, oy, W, H} = mediaRect(), R = (b) => [ox + b[0] * W, oy + b[1] * H, (b[2] - b[0]) * W, (b[3] - b[1]) * H];
+  ctx.font = "600 12px 'Geist Mono', monospace";
+  for (const z of zones) { const [x, y, w, h] = R(z.box), st = stock[z.id], alert = st && st.alert, col = alert ? "#FF8A7A" : C.zone;
+    ctx.setLineDash([7, 5]); ctx.lineWidth = 2; ctx.strokeStyle = col; ctx.strokeRect(x, y, w, h); ctx.setLineDash([]);
+    const label = `${z.id}${st ? " · " + (alert ? "restock" : st.label) : ""}`; ctx.fillStyle = col; ctx.fillRect(x, y - 20, ctx.measureText(label).width + 14, 20);
+    ctx.fillStyle = "#17181A"; ctx.fillText(label, x + 7, y - 6); }
+  if (dragStart) { const [x, y, w, h] = R([dragStart[0], dragStart[1], dragNow[0], dragNow[1]]); ctx.setLineDash([7, 5]); ctx.strokeStyle = C.zone; ctx.strokeRect(x, y, w, h); ctx.setLineDash([]); }
+  for (const s of shoppers) { const [x, y, w, h] = R(s.box); ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(243,241,234,0.5)"; ctx.strokeRect(x, y, w, h);
+    const t = zones.length ? `shopper ${s.id}` : `shopper ${s.id} · holding ${s.p_hold.toFixed(2)}`; ctx.fillStyle = "rgba(17,19,21,0.85)"; ctx.fillRect(x, y + h - 22, ctx.measureText(t).width + 14, 22);
+    ctx.fillStyle = "#F3F1EA"; ctx.fillText(t, x + 7, y + h - 7); }
+  for (const hd of hands) { const [x, y, w, h] = R(hd.box); ctx.strokeStyle = hd.zone ? C.hand : "rgba(143,209,106,0.35)"; ctx.lineWidth = hd.zone ? 3 : 1.5; ctx.strokeRect(x, y, w, h); }
+  const now = performance.now(); flashes = flashes.filter((f) => f.until > now);
+  for (const f of flashes) { const [x, y, w, h] = R(f.box); ctx.strokeStyle = C.zone; ctx.lineWidth = 3; ctx.strokeRect(x, y, w, h);
+    ctx.fillStyle = C.zone; ctx.fillRect(x, y - 22, ctx.measureText(f.label).width + 14, 22); ctx.fillStyle = "#17181A"; ctx.fillText(f.label, x + 7, y - 7); }
+  requestAnimationFrame(draw);
+}
+async function stop() {
+  clearInterval(sendTimer); [ingestWs, eventsWs].forEach((w) => w && w.close()); if (pc) pc.close();
+  if (stream) stream.getTracks().forEach((t) => t.stop()); $("remote").removeAttribute("src");
+  if (session) await fetch(`/v1/sessions/${session.session_id}`, {method: "DELETE", headers: headers()}).catch(() => {});
+  session = pc = ingestWs = eventsWs = stream = null; $("phone").hidden = true; setStatus("stopped");
+}
+async function refreshBadge() {
+  try { const r = await fetch("/v1/sessions", {headers: headers()}); if (!r.ok) return; const {sessions} = await r.json();
+    const n = sessions.reduce((s, x) => s + x.to_verify, 0); $("toCheck").textContent = n ? String(n) : ""; } catch (e) {}
+}
+$("start").onclick = () => start().catch((e) => { setStatus("error", "warn"); log(e.message, "err", "error"); });
+$("stop").onclick = stop;
+$("key").onchange = () => { store.set("ss_key", $("key").value); loadShops(); };
+const pre = new URLSearchParams(location.search); if (pre.get("source")) source = pre.get("source");
+$("ringToken").value = sessionStorage.getItem("ss_ring_token") || "";
+let opened = null; try { opened = JSON.parse(sessionStorage.getItem("ss_ring_open") || "null"); } catch (e) {}
+setSource(source); renderZones(); renderPhotos(); refreshBadge(); setInterval(refreshBadge, 5000);
+loadShops().then(() => {                                  // a camera opened from the Cameras page
+  if (!opened) return;
+  $("ringShop").value = opened.shop || ""; $("tokenBox").style.display = opened.shop ? "none" : "block";
+  $("ringDevice").innerHTML = `<option value="${esc(opened.device)}">${esc(opened.name)}</option>`;
+  $("ringMode").value = opened.mode; sessionStorage.removeItem("ss_ring_open"); setSource("ring");
+  log(`${opened.name} ready. Press Start to open its live view`, "", "Ring");
+});
+requestAnimationFrame(draw);
+</script>
+<script src="/static/nemotron.js"></script>
+</body>
+</html>

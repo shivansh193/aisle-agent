@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F3F1EA">
+<title>Aisle Agent · Your bill</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/ledger.css">
+<style>
+  body { min-height:100vh; }
+  .wrap { max-width:480px; margin:0 auto; padding:0 16px calc(150px + env(safe-area-inset-bottom)); }
+  .bar { display:flex; align-items:center; justify-content:space-between; height:60px; }
+  .bar .brand b { font-size:16px; }
+  h1 { font-size:30px; letter-spacing:-.8px; margin:14px 0 4px; }
+  .lede { color:var(--muted); font-size:14.5px; margin:0 0 18px; }
+  .item { background:var(--card); border:1px solid var(--rule); border-radius:12px; padding:14px 14px 12px; margin-top:10px; }
+  .item.fresh { animation:in .35s ease-out; }
+  @keyframes in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  .item .top2 { display:flex; justify-content:space-between; gap:12px; align-items:baseline; }
+  .item .nm { font-weight:600; font-size:16px; }
+  .item .pr { font:600 16px var(--mono); white-space:nowrap; }
+  .item.removed .nm, .item.removed .pr { text-decoration:line-through; color:var(--faint); }
+  .item .meta { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:8px; min-height:32px; }
+  .chip { font:500 12px var(--mono); border-radius:999px; padding:3px 9px; background:var(--rule2); color:var(--ink2); }
+  .chip.warn { background:var(--amber-bg); color:var(--amber-ink); }
+  .chip.bad { background:var(--red-bg); color:var(--red); }
+  .chip.good { background:#DCEBDF; color:var(--green); }
+  .nm-btn { border:1px solid var(--edge); background:var(--paper); border-radius:8px; min-height:36px; padding:0 12px; font-size:14px; font-weight:500; }
+  .item .meta.asking { flex-direction:column; align-items:stretch; }
+  .confirm { display:flex; gap:8px; align-items:center; justify-content:flex-end; padding-top:10px; border-top:1px solid var(--rule2); }
+  .confirm span { margin-right:auto; }
+  .bar .brand b, .bar .brand .sep, .bar .brand .shop { display:inline-block !important; }
+  .confirm span { font-size:13.5px; color:var(--ink2); }
+  .confirm .yes { border:0; background:var(--ink); color:var(--ground); border-radius:8px; min-height:36px; padding:0 12px; font-weight:600; }
+  .confirm .no { border:0; background:none; min-height:36px; padding:0 6px; color:var(--muted); }
+  .empty { border:1.5px dashed var(--edge); border-radius:12px; padding:28px 18px; text-align:center; color:var(--muted); margin-top:10px; }
+  .foot { position:fixed; left:0; right:0; bottom:0; background:rgba(251,250,246,.94); backdrop-filter:blur(12px); border-top:1px solid var(--rule);
+          padding:14px 16px calc(14px + env(safe-area-inset-bottom)); }
+  .foot .in2 { max-width:480px; margin:0 auto; }
+  .tot { display:flex; justify-content:space-between; align-items:baseline; }
+  .tot b { font-size:17px; } .tot .v { font:700 26px var(--mono); letter-spacing:-.5px; }
+  .code { margin-top:8px; display:flex; justify-content:space-between; align-items:center; font-size:13.5px; color:var(--muted); }
+  .code .c { font:600 17px var(--mono); letter-spacing:3px; color:var(--ink); background:var(--card); border:1px solid var(--rule); border-radius:8px; padding:3px 10px; }
+  .closed { margin-top:40px; text-align:center; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <span class="brand"><svg width="26" height="26" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#17181A"/><path d="M8 10h12M8 14h12M8 18h7" stroke="#F3F1EA" stroke-width="2" stroke-linecap="round"/><circle cx="19.5" cy="18" r="1.8" fill="#8FD16A"/></svg><b>Aisle Agent</b><span class="sep"></span><span class="shop">Aisle demo</span></span>
+    <span class="livepill"><span class="dot" id="dot"></span><span class="txt" id="status">connecting</span></span>
+  </div>
+  <h1>Your bill</h1>
+  <p class="lede">Items you take from a shelf appear here. If one isn't yours, tap "Not mine" and staff will check it at the exit.</p>
+  <div id="lines" aria-live="polite"></div>
+</div>
+<div class="foot" id="foot">
+  <div class="in2">
+    <div class="tot"><b>Total</b><span class="v" id="total">₹0</span></div>
+    <div class="code"><span id="hint">Show this code at the exit</span><span class="c" id="code">····</span></div>
+  </div>
+</div>
+<script>
+const token = location.pathname.split("/").filter(Boolean).pop();
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const cap = (s) => s ? s[0].toUpperCase() + s.slice(1) : s;
+const fmt = (v) => "₹" + Math.round(v).toLocaleString("en-IN");
+const seen = new Set();
+let asking = null, bill = null;
+
+function chip(l) {
+  if (l.status === "verify") return `<span class="chip warn">checked at exit</span>`;
+  if (l.status === "disputed") return `<span class="chip bad">you said not mine</span>`;
+  if (l.status === "removed") return `<span class="chip bad">removed at exit</span>`;
+  if (l.status === "approved") return `<span class="chip good">kept at exit</span>`;
+  return `<span class="chip">added${l.seen > 1 ? " · counted once" : ""}</span>`;
+}
+function render(b) {
+  bill = b;
+  $("total").textContent = fmt(b.total);
+  $("code").textContent = b.code;
+  $("hint").textContent = b.to_verify ? `${b.to_verify} item${b.to_verify > 1 ? "s" : ""} to check · show this code` : "Show this code at the exit";
+  if (!b.lines.length) { $("lines").innerHTML = '<div class="empty">Nothing yet. Take something from a shelf and it shows up here.</div>'; return; }
+  $("lines").innerHTML = b.lines.slice().reverse().map((l) => {
+    const fresh = !seen.has(l.id); seen.add(l.id);
+    const open = ["ok", "verify", "approved"].includes(l.status);
+    const act = !open ? "" : asking === l.id
+      ? `<span class="confirm"><span>Not yours?</span><button class="yes" data-yes="${l.id}">Yes, not mine</button><button class="no" data-no="1">Cancel</button></span>`
+      : `<button class="nm-btn" data-ask="${l.id}">Not mine</button>`;
+    return `<div class="item ${l.status}${fresh ? " fresh" : ""}"><div class="top2"><span class="nm">${esc(cap(l.name))}</span><span class="pr">${fmt(l.price)}</span></div>
+      <div class="meta${asking === l.id ? " asking" : ""}"><span>${chip(l)}</span>${act}</div></div>`;
+  }).join("");
+}
+$("lines").addEventListener("click", async (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.ask) { asking = Number(t.dataset.ask); render(bill); }
+  else if (t.dataset.no) { asking = null; render(bill); }
+  else if (t.dataset.yes) {
+    asking = null; t.disabled = true;
+    const r = await fetch(`/p/${token}/lines/${t.dataset.yes}/not-mine`, {method: "POST"});
+    if (r.ok) render(await r.json()); else render(bill);
+  }
+});
+function live(on, txt) { $("dot").classList.toggle("live", on); $("status").textContent = txt; }
+function connect() {
+  const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/p/${token}/events`);
+  ws.onopen = () => live(true, "live");
+  ws.onmessage = (m) => render(JSON.parse(m.data));
+  ws.onclose = (e) => {
+    if (e.code === 4404) { live(false, "closed"); $("lines").innerHTML = '<p class="closed">This bill has closed. Thanks for shopping.</p>'; $("foot").hidden = true; return; }
+    live(false, "reconnecting"); setTimeout(connect, 2000);
+  };
+}
+fetch(`/p/${token}/bill`).then((r) => r.ok ? r.json() : null).then((b) => b && render(b));
+connect();
+</script>
+</body>
+</html>

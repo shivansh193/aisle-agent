@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aisle Agent · Shop layout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/ledger.css">
+<style>
+  .stats { display:flex; gap:22px; flex-wrap:wrap; }
+  .stats div { font:12px var(--mono); color:var(--muted); } .stats b { display:block; font:600 20px var(--mono); color:var(--ink); }
+  .stats .warn b { color:var(--amber); } .stats .bad b { color:var(--red); }
+  .tools { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .tools .btn { min-height:36px; padding:6px 11px; font-size:13.5px; }
+  .plan { width:100%; display:block; background:var(--card); border:1px solid var(--rule); border-radius:10px; margin-top:12px; touch-action:none; user-select:none; }
+  .plan .gl { stroke:var(--rule2); stroke-width:.04; }
+  .plan .s rect.b { stroke-width:.12; cursor:move; }
+  .plan .s.sel rect.b { stroke:var(--ink) !important; stroke-width:.2; }
+  .plan text { font-family:Geist, system-ui, sans-serif; pointer-events:none; }
+  .plan .rz { fill:var(--ink); cursor:nwse-resize; }
+  .legend { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font:12px var(--mono); color:var(--muted); }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:6px; vertical-align:-1px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { text-align:left; font:500 11px var(--mono); letter-spacing:.6px; text-transform:uppercase; color:var(--muted); padding:6px 6px 6px 0; }
+  td { padding:5px 6px 5px 0; border-top:1px solid var(--rule2); vertical-align:middle; }
+  td input, td select { width:100%; border:1px solid var(--edge); border-radius:7px; padding:6px 8px; background:var(--paper); min-height:34px; }
+  td.n input { max-width:76px; font-family:var(--mono); }
+  .x { border:0; background:none; color:var(--muted); min-width:32px; min-height:32px; font-size:18px; }
+  .x:hover { color:var(--red); }
+  .chip { font:500 11.5px var(--mono); border-radius:999px; padding:2px 8px; background:var(--rule2); color:var(--ink2); white-space:nowrap; }
+  .chip.low, .chip.alert { background:var(--amber-bg); color:var(--amber-ink); } .chip.empty { background:var(--red-bg); color:var(--red); }
+  .chip.ok { background:#DCEBDF; color:var(--green); }
+  .att { display:flex; justify-content:space-between; gap:10px; align-items:center; padding:10px 0; border-top:1px solid var(--rule2); }
+  .att button { min-height:34px; }
+  .moves div { display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--rule2); font:12.5px var(--mono); color:var(--ink2); }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .hint { font-size:12.5px; color:var(--muted); margin:6px 0 0; }
+  .saved { font:13px var(--mono); color:var(--muted); } .saved.dirty { color:var(--amber); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="in">
+    <a class="brand" href="/" aria-label="Aisle Agent home"><svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#17181A"/><path d="M8 10h12M8 14h12M8 18h7" stroke="#F3F1EA" stroke-width="2" stroke-linecap="round"/><circle cx="19.5" cy="18" r="1.8" fill="#8FD16A"/></svg><b>Aisle Agent</b><span class="sep"></span><span class="shop" id="shopName">Aisle demo</span></a>
+    <nav class="tabs" aria-label="Sections"><a href="/">Console</a><a href="/exit">Exit check</a><a href="/layout" aria-current="page">Layout</a><a href="/cameras">Cameras</a></nav>
+    <div class="topright"><span class="livepill"><span class="dot" id="dot"></span><span class="txt" id="status">loading</span></span></div>
+  </div>
+</header>
+
+<main class="page">
+  <div class="pagehead">
+    <h1>Shop layout</h1>
+    <div class="stats" id="stats"></div>
+    <div class="ctl"><span class="saved" id="saved"></span><input class="field" id="key" type="password" placeholder="Shop key" style="width:150px; min-height:44px"><button class="btn ink" id="save">Save layout</button></div>
+  </div>
+
+  <div class="cols" style="margin-top:20px">
+    <section class="main">
+      <div class="card white">
+        <div class="row">
+          <h2>Floor plan</h2>
+          <div class="tools"><span class="muted">Add</span>
+            <button class="btn" data-add="shelf">Shelf</button><button class="btn" data-add="fridge">Fridge</button>
+            <button class="btn" data-add="freezer">Freezer</button><button class="btn" data-add="counter">Counter</button>
+            <button class="btn" data-add="entrance">Entrance</button></div>
+        </div>
+        <svg class="plan" id="plan" role="img" aria-label="Shop floor plan"></svg>
+        <div class="legend"><span><i style="background:#DCEBDF"></i>stocked</span><span><i style="background:var(--amber-bg)"></i>low or restock alert</span>
+          <span><i style="background:var(--red-bg)"></i>empty</span><span>Drag to move · corner to resize · each square ≈ 0.5 m</span></div>
+        <div id="starter" class="hint" hidden>No layout yet. <button class="btn" id="example" style="min-height:34px; margin-left:6px">Start from an example shop</button></div>
+      </div>
+
+      <div class="card">
+        <div class="row"><h2>Products</h2><span class="muted">Prices here are what the bill charges</span></div>
+        <table style="margin-top:10px"><thead><tr><th>Product</th><th style="width:110px">Price ₹</th><th style="width:140px">Code</th><th style="width:36px"></th></tr></thead><tbody id="prods"></tbody></table>
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap">
+          <input class="field" id="pName" placeholder="New product, e.g. jar of jam" style="flex:2 1 220px">
+          <input class="field mono" id="pPrice" placeholder="Price" inputmode="decimal" style="flex:1 1 90px">
+          <button class="btn" id="pAdd">Add product</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card white" id="insp"></div>
+      <div class="card">
+        <h2>Needs attention</h2>
+        <div id="attn" style="margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <h2>Stock moves</h2>
+        <p class="hint">A confirmed take lowers the shelf linked to its camera zone; a line removed at the exit puts it back.</p>
+        <div class="moves" id="moves" style="margin-top:8px"></div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+const cap = (s) => { s = String(s ?? ""); return s.charAt(0).toUpperCase() + s.slice(1); };
+const fmt = (v) => "₹" + Math.round(v).toLocaleString("en-IN");
+const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "item";
+const store = {get: (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+               set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }};
+const KIND = {shelf: ["Shelf", "#F6F3EA"], fridge: ["Fridge", "#E6EEF3"], freezer: ["Freezer", "#E3EAF2"], counter: ["Counter", "#ECE8DE"], entrance: ["Entrance", "#FFFFFF"]};
+const STATE = {ok: ["#1D6B42", "stocked"], low: ["#A85A00", "low"], alert: ["#A85A00", "restock alert"], empty: ["#B42318", "empty"]};
+const EXAMPLE = {name: "Corner shop",
+  products: [{sku: "frozen", name: "frozen food pack", price: 220}, {sku: "tray", name: "tray of sauce or ready meal", price: 180},
+    {sku: "milk", name: "carton of milk or juice", price: 68}, {sku: "yoghurt", name: "cup of yoghurt", price: 35},
+    {sku: "biscuits", name: "packet of biscuits", price: 40}, {sku: "cereal", name: "box of cereal", price: 145}, {sku: "jam", name: "jar of jam", price: 189}],
+  shelves: [
+    {name: "Freezer", kind: "freezer", x: 2, y: 2, w: 14, h: 3, zone: "Freezer", items: [{sku: "frozen", qty: 8, min: 4}, {sku: "tray", qty: 6, min: 3}, {sku: "milk", qty: 10, min: 4}]},
+    {name: "Dairy fridge", kind: "fridge", x: 20, y: 2, w: 8, h: 3, zone: "", items: [{sku: "yoghurt", qty: 18, min: 6}]},
+    {name: "Aisle 1", kind: "shelf", x: 4, y: 10, w: 16, h: 2, zone: "", items: [{sku: "biscuits", qty: 40, min: 10}, {sku: "cereal", qty: 9, min: 3}]},
+    {name: "Aisle 2", kind: "shelf", x: 4, y: 15, w: 16, h: 2, zone: "", items: [{sku: "jam", qty: 2, min: 3}]},
+    {name: "Counter", kind: "counter", x: 28, y: 18, w: 8, h: 3, zone: "", items: []},
+    {name: "Entrance", kind: "entrance", x: 30, y: 24, w: 6, h: 2, zone: "Doorstep", items: []}]};
+
+let L = null, sel = null, dirty = false, drag = null;
+$("key").value = store.get("ss_key", "");
+const headers = (h = {}) => { const k = $("key").value.trim(); return k ? Object.assign({Authorization: "Bearer " + k}, h) : h; };
+$("key").onchange = () => { store.set("ss_key", $("key").value.trim()); load(); };
+
+function setDirty(d) { dirty = d; $("saved").textContent = d ? "unsaved changes" : "saved"; $("saved").classList.toggle("dirty", d); }
+function live(on, txt) { $("dot").className = "dot" + (on ? " live" : ""); $("status").textContent = txt; }
+function viewOf(s) {   // state for an edited (unsaved) shelf, same rules as the server
+  if (s.state && !dirty) return s.state;
+  if (s.items.length && s.items.every((i) => i.qty === 0)) return "empty";
+  if (s.alert) return "alert";
+  return s.items.some((i) => i.qty <= i.min) ? "low" : "ok";
+}
+
+function drawPlan() {
+  const [W, H] = L.grid, svg = $("plan");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  let g = "";
+  for (let x = 1; x < W; x++) g += `<line class="gl" x1="${x}" y1="0" x2="${x}" y2="${H}"/>`;
+  for (let y = 1; y < H; y++) g += `<line class="gl" x1="0" y1="${y}" x2="${W}" y2="${y}"/>`;
+  L.shelves.forEach((s, i) => {
+    const st = viewOf(s), stroke = ["counter", "entrance"].includes(s.kind) ? "#CFC9BB" : STATE[st][0];
+    const units = s.items.reduce((a, b) => a + b.qty, 0), tall = s.h >= 3;
+    const fs = Math.min(0.8, tall ? s.h * 0.34 : s.h * 0.42, s.w / Math.max(6, s.name.length) * (tall ? 1.6 : 0.9));
+    g += `<g class="s${sel === i ? " sel" : ""}" data-i="${i}">
+      <rect class="b" x="${s.x + .06}" y="${s.y + .06}" width="${s.w - .12}" height="${s.h - .12}" rx=".35" fill="${KIND[s.kind][1]}" stroke="${stroke}"
+        ${s.kind === "entrance" ? 'stroke-dasharray=".4 .3"' : ""}/>
+      ${tall ? `<text x="${s.x + .45}" y="${s.y + .45 + fs}" font-size="${fs}" font-weight="600" fill="#17181A">${esc(s.name)}</text>
+        ${s.items.length ? `<text x="${s.x + .45}" y="${s.y + s.h - .45}" font-size="${Math.min(.62, fs * .85)}" fill="${STATE[st][0]}">${units} units · ${STATE[st][1]}</text>` : ""}
+        ${s.zone ? `<text x="${s.x + s.w - .4}" y="${s.y + .45 + fs}" font-size="${Math.min(.55, fs * .8)}" text-anchor="end" fill="#5B5F66">◉ ${esc(s.zone)}</text>` : ""}`
+      : `<text x="${s.x + .45}" y="${s.y + s.h / 2 + fs * .36}" font-size="${fs}" font-weight="600" fill="#17181A">${s.zone ? "◉ " : ""}${esc(s.name)}</text>
+        ${s.items.length && s.w >= 7 ? `<text x="${s.x + s.w - .4}" y="${s.y + s.h / 2 + fs * .32}" font-size="${fs * .82}" text-anchor="end" fill="${STATE[st][0]}">${units} · ${STATE[st][1]}</text>` : ""}`}
+      ${sel === i ? `<rect class="rz" data-rz="${i}" x="${s.x + s.w - .55}" y="${s.y + s.h - .55}" width=".5" height=".5" rx=".1"/>` : ""}
+    </g>`;
+  });
+  svg.innerHTML = g;
+}
+function cell(e) { const p = $("plan").createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform($("plan").getScreenCTM().inverse()); return [q.x, q.y]; }
+$("plan").addEventListener("pointerdown", (e) => {
+  const rz = e.target.dataset.rz, g = e.target.closest("g.s");
+  if (!g) { sel = null; render(); return; }
+  const i = Number(g.dataset.i), s = L.shelves[i], [x, y] = cell(e);
+  sel = i; drag = {i, rz: rz !== undefined, dx: x - s.x, dy: y - s.y, x0: s.x, y0: s.y, w0: s.w, h0: s.h, px: x, py: y, moved: false};
+  $("plan").setPointerCapture(e.pointerId); render();
+});
+$("plan").addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const s = L.shelves[drag.i], [x, y] = cell(e), [W, H] = L.grid;
+  if (drag.rz) { s.w = Math.max(1, Math.min(W - s.x, Math.round(drag.w0 + x - drag.px))); s.h = Math.max(1, Math.min(H - s.y, Math.round(drag.h0 + y - drag.py))); }
+  else { s.x = Math.max(0, Math.min(W - s.w, Math.round(x - drag.dx))); s.y = Math.max(0, Math.min(H - s.h, Math.round(y - drag.dy))); }
+  if (s.x !== drag.x0 || s.y !== drag.y0 || s.w !== drag.w0 || s.h !== drag.h0) { drag.moved = true; setDirty(true); }
+  drawPlan();
+});
+$("plan").addEventListener("pointerup", () => { if (drag && drag.moved) render(); drag = null; });
+
+document.querySelectorAll("[data-add]").forEach((b) => b.onclick = () => {
+  const kind = b.dataset.add, n = L.shelves.filter((s) => s.kind === kind).length + 1, name = `${KIND[kind][0]} ${n}`;
+  const size = {shelf: [10, 2], fridge: [6, 3], freezer: [8, 3], counter: [6, 3], entrance: [5, 2]}[kind];
+  const spot = findSpot(size[0], size[1]);
+  L.shelves.push({id: slug(name) + "-" + Date.now().toString(36).slice(-3), name, kind, x: spot[0], y: spot[1], w: size[0], h: size[1], zone: "", items: [], alert: null});
+  sel = L.shelves.length - 1; setDirty(true); render();
+});
+function findSpot(w, h) {
+  const [W, H] = L.grid, hit = (x, y) => L.shelves.some((s) => x < s.x + s.w && x + w > s.x && y < s.y + s.h && y + h > s.y);
+  for (let y = 1; y + h <= H; y++) for (let x = 1; x + w <= W; x++) if (!hit(x, y)) return [x, y];
+  return [0, 0];
+}
+
+function inspector() {
+  const el = $("insp");
+  if (sel === null || !L.shelves[sel]) {
+    el.innerHTML = `<h2>Select a shelf</h2><p class="hint">Click a shelf on the plan to set its products, stock and the camera zone that watches it.</p>`; return;
+  }
+  const s = L.shelves[sel], st = viewOf(s), stockable = !["counter", "entrance"].includes(s.kind);
+  const opts = (cur) => L.products.map((p) => `<option value="${esc(p.sku)}"${p.sku === cur ? " selected" : ""}>${esc(cap(p.name))}</option>`).join("");
+  el.innerHTML = `<div class="row"><h2>${esc(s.name)}</h2><span class="chip ${st}">${STATE[st][1]}</span></div>
+    <div class="grid2" style="margin-top:12px">
+      <div><label class="label" for="sName">Name</label><input class="field" id="sName" value="${esc(s.name)}"></div>
+      <div><label class="label" for="sKind">Type</label><select class="field" id="sKind">${Object.keys(KIND).map((k) => `<option value="${k}"${k === s.kind ? " selected" : ""}>${KIND[k][0]}</option>`).join("")}</select></div>
+    </div>
+    <label class="label" for="sZone" style="margin-top:12px">Camera zone</label>
+    <input class="field" id="sZone" value="${esc(s.zone || "")}" placeholder="${esc(s.name)}">
+    <p class="hint">The name of the zone drawn over this shelf on a camera feed. Leave blank to use the shelf's name.</p>
+    ${stockable ? `<table style="margin-top:14px"><thead><tr><th>On this shelf</th><th style="width:76px">Stock</th><th style="width:76px">Min</th><th style="width:32px"></th></tr></thead>
+      <tbody>${s.items.map((it, j) => `<tr><td><select data-it="${j}" data-f="sku">${opts(it.sku)}</select></td>
+        <td class="n"><input data-it="${j}" data-f="qty" type="number" min="0" value="${it.qty}"></td>
+        <td class="n"><input data-it="${j}" data-f="min" type="number" min="0" value="${it.min}"></td>
+        <td><button class="x" data-rm="${j}" aria-label="Remove">×</button></td></tr>`).join("") ||
+        `<tr><td colspan="4" class="muted" style="padding:10px 0">No products on this shelf yet.</td></tr>`}</tbody></table>
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap">
+        <button class="btn" id="itAdd" ${L.products.length ? "" : "disabled"}>Add a product here</button>
+        ${s.alert ? `<button class="btn" id="clearAlert">Mark restocked</button>` : ""}</div>` : ""}
+    <button class="btn danger" id="sDel" style="margin-top:16px">Delete ${esc(KIND[s.kind][0].toLowerCase())}</button>`;
+  $("sName").oninput = (e) => { s.name = e.target.value; setDirty(true); drawPlan(); };
+  $("sName").onchange = () => render();
+  $("sKind").onchange = (e) => { s.kind = e.target.value; setDirty(true); render(); };
+  $("sZone").oninput = (e) => { s.zone = e.target.value; setDirty(true); drawPlan(); };
+  $("sDel").onclick = () => { L.shelves.splice(sel, 1); sel = null; setDirty(true); render(); };
+  el.querySelectorAll("[data-it]").forEach((inp) => inp.onchange = () => {
+    const it = s.items[inp.dataset.it], f = inp.dataset.f; it[f] = f === "sku" ? inp.value : Math.max(0, parseInt(inp.value || "0", 10)); setDirty(true); render(); });
+  el.querySelectorAll("[data-rm]").forEach((b) => b.onclick = () => { s.items.splice(b.dataset.rm, 1); setDirty(true); render(); });
+  if ($("itAdd")) $("itAdd").onclick = () => {
+    const free = L.products.find((p) => !s.items.some((i) => i.sku === p.sku)) || L.products[0];
+    s.items.push({sku: free.sku, qty: 10, min: 3}); setDirty(true); render(); };
+  if ($("clearAlert")) $("clearAlert").onclick = () => restock(s.id, {});
+}
+
+function products() {
+  $("prods").innerHTML = L.products.map((p, i) => `<tr><td><input data-p="${i}" data-f="name" value="${esc(p.name)}"></td>
+    <td class="n"><input data-p="${i}" data-f="price" type="number" min="0" step="0.5" value="${p.price}"></td>
+    <td class="mono muted" style="font-size:12.5px">${esc(p.sku)}</td><td><button class="x" data-prm="${i}" aria-label="Remove ${esc(p.name)}">×</button></td></tr>`).join("") ||
+    `<tr><td colspan="4" class="muted" style="padding:10px 0">No products yet.</td></tr>`;
+  $("prods").querySelectorAll("[data-p]").forEach((inp) => inp.onchange = () => {
+    const p = L.products[inp.dataset.p]; p[inp.dataset.f] = inp.dataset.f === "price" ? Math.max(0, Number(inp.value)) : inp.value; setDirty(true); render(); });
+  $("prods").querySelectorAll("[data-prm]").forEach((b) => b.onclick = () => {
+    const sku = L.products[b.dataset.prm].sku; L.products.splice(b.dataset.prm, 1);
+    L.shelves.forEach((s) => s.items = s.items.filter((i) => i.sku !== sku)); setDirty(true); render(); });
+}
+$("pAdd").onclick = () => {
+  const name = $("pName").value.trim(), price = Number($("pPrice").value);
+  if (!name || !(price >= 0)) { $("pName").focus(); return; }
+  let sku = slug(name), n = 2; while (L.products.some((p) => p.sku === sku)) sku = `${slug(name)}-${n++}`;
+  L.products.push({sku, name, price}); $("pName").value = $("pPrice").value = ""; setDirty(true); render();
+};
+
+function summary() {
+  const names = Object.fromEntries(L.products.map((p) => [p.sku, p]));
+  const units = L.shelves.reduce((a, s) => a + s.items.reduce((b, i) => b + i.qty, 0), 0);
+  const value = L.shelves.reduce((a, s) => a + s.items.reduce((b, i) => b + i.qty * ((names[i.sku] || {}).price || 0), 0), 0);
+  const states = L.shelves.map(viewOf), low = states.filter((x) => x === "low" || x === "alert").length, empty = states.filter((x) => x === "empty").length;
+  $("stats").innerHTML = `<div><b>${L.shelves.length}</b>shelves</div><div><b>${units}</b>units</div><div><b>${fmt(value)}</b>on the shelves</div>
+    <div class="${low ? "warn" : ""}"><b>${low}</b>low</div><div class="${empty ? "bad" : ""}"><b>${empty}</b>empty</div>`;
+  const need = L.shelves.map((s, i) => [s, i, viewOf(s)]).filter(([, , st]) => st !== "ok" && st);
+  $("attn").innerHTML = need.filter(([s]) => s.items.length || s.alert).map(([s, i, st]) => {
+    const lowItems = s.items.filter((it) => it.qty <= it.min).map((it) => `${cap((names[it.sku] || {}).name || it.sku)} (${it.qty})`);
+    return `<div class="att"><div><b style="font-size:14px">${esc(s.name)}</b> <span class="chip ${st}">${STATE[st][1]}</span>
+      <div class="hint" style="margin:3px 0 0">${esc(lowItems.join(", ") || (s.alert ? "the camera sees it running low" : ""))}</div></div>
+      <button class="btn" data-sel="${i}">Open</button></div>`; }).join("") || '<p class="muted">Every shelf is stocked.</p>';
+  $("attn").querySelectorAll("[data-sel]").forEach((b) => b.onclick = () => { sel = Number(b.dataset.sel); render(); });
+  $("moves").innerHTML = (L.log || []).slice().reverse().slice(0, 12).map((m) => {
+    const sh = L.shelves.find((s) => s.id === m.shelf);
+    return `<div><span>${new Date(m.t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})} · ${esc(cap((names[m.sku] || {}).name || m.sku))} · ${esc(sh ? sh.name : m.shelf)}</span>
+      <span style="color:${m.delta < 0 ? "var(--ink)" : "var(--green)"}">${m.delta > 0 ? "+" : ""}${m.delta} ${esc(m.why)} → ${m.qty}</span></div>`; }).join("") ||
+    '<p class="muted">No moves yet.</p>';
+  $("shopName").textContent = L.name;
+  $("starter").hidden = L.shelves.length > 0;
+}
+function render() { drawPlan(); inspector(); products(); summary(); }
+
+async function api(path, opt = {}) {
+  const r = await fetch(path, Object.assign({}, opt, {headers: headers(opt.headers || {})}));
+  if (!r.ok) throw new Error(r.status === 401 ? "Enter this shop's key." : (await r.text()).replace(/^{"detail":"|"}$/g, ""));
+  return r.json();
+}
+async function load() {
+  try { L = await api("/v1/layout"); setDirty(false); live(true, "live"); render(); }
+  catch (e) { live(false, e.message); }
+}
+async function restock(id, body) {
+  try { const v = await api(`/v1/layout/shelves/${encodeURIComponent(id)}/restock`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    if (!dirty) { L = v; render(); } else { const s = v.shelves.find((x) => x.id === id), mine = L.shelves.find((x) => x.id === id); if (s && mine) { mine.alert = s.alert; render(); } } }
+  catch (e) { live(false, e.message); }
+}
+$("save").onclick = async () => {
+  try { L = await api("/v1/layout", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(L)}); setDirty(false); live(true, "saved"); render(); }
+  catch (e) { $("saved").textContent = e.message; $("saved").classList.add("dirty"); }
+};
+$("example").onclick = () => { L = Object.assign({}, L, JSON.parse(JSON.stringify(EXAMPLE))); L.shelves.forEach((s) => s.id = slug(s.name)); sel = 0; setDirty(true); render(); };
+setInterval(async () => {          // stock moves live while sessions run; local edits are kept until saved
+  if (!L || drag) return;
+  try {
+    const v = await api("/v1/layout");
+    if (!dirty) { L = v; render(); return; }
+    v.shelves.forEach((s) => { const mine = L.shelves.find((x) => x.id === s.id); if (!mine) return;
+      mine.alert = s.alert; s.items.forEach((it) => { const m = mine.items.find((x) => x.sku === it.sku); if (m && !document.activeElement.dataset.it) m.qty = it.qty; }); });
+    L.log = v.log; drawPlan(); summary();
+  } catch (e) {}
+}, 3000);
+load();
+</script>
+</body>
+</html>
