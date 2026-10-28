@@ -11,7 +11,7 @@ import time
 import zipfile
 
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-U", "transformers>=4.49", "accelerate", "ultralytics"], check=True)
-for name, marker in (("vjev", "decider.py"), ("shelfsense_live", "pipeline.py")):
+for name, marker in (("vjev", "decider.py"), ("aisle_agent", "pipeline.py")):
     hits = glob.glob(f"/kaggle/input/**/{marker}", recursive=True)
     if not hits:
         for z in glob.glob("/kaggle/input/**/*.zip", recursive=True):
@@ -26,8 +26,8 @@ for name, marker in (("vjev", "decider.py"), ("shelfsense_live", "pipeline.py"))
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
-from shelfsense_live.logic import STOCK_LEVELS  # noqa: E402
-from shelfsense_live.models import VjevEngine  # noqa: E402
+from aisle_agent.logic import STOCK_LEVELS  # noqa: E402
+from aisle_agent.models import VjevEngine  # noqa: E402
 
 items = json.load(open(glob.glob("/kaggle/input/**/labels.json", recursive=True)[0]))
 hits = glob.glob("/kaggle/input/**/shelf/0.jpg", recursive=True)

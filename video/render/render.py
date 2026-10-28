@@ -1,7 +1,7 @@
 """Render the Aisle Agent demo video with Hyperframes on Kaggle (CPU).
 
 Inputs:  aisle-agent-recordings (screen recordings of the live system + marks.json + build_video.py),
-         shelfsense-brag-assets (interface SFX and the music bed)
+         aisle-agent-video-assets (interface SFX and the music bed)
 Steps:   Node 22 + FFmpeg + Geist + GSAP -> composition -> hyperframes lint + check -> render
          -> poster frame baked as frame 0 -> music bed mixed under the SFX (-16 LUFS) -> preview sheet
 Outputs: aisle_agent_demo.mp4, poster.jpg, preview.jpg, composition.zip, lint.txt, check.txt, render.txt
