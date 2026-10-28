@@ -121,7 +121,7 @@
     if (!btn || !mount) return;
     btn.onclick = async () => {
       btn.disabled = true;
-      mount.innerHTML = '<section class="card white"><h2>End-of-day report</h2><p class="muted">Nemotron-3-Ultra is reading today's bills, events, stock and exit decisions…</p></section>';
+      mount.innerHTML = '<section class="card white"><h2>End-of-day report</h2><p class="muted">Nemotron-3-Ultra is reading the day&rsquo;s bills, events, stock and exit decisions…</p></section>';
       try {
         const r = await fetch("/v1/report", {method: "POST", headers: hdr()});
         const out = await r.json();

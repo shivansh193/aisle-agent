@@ -205,7 +205,14 @@ async def scene_shelf_and_exit(pw):
     await page.mouse.wheel(0, 500)
     await page.wait_for_timeout(3000)
     await page.mouse.wheel(0, -500)
-    await page.wait_for_timeout(3000)
+    await page.wait_for_timeout(2000)
+    await page.evaluate("window.scrollTo({top: 0, behavior: 'smooth'})")
+    await page.wait_for_timeout(600)
+    await click(page, ".engbadge", pause=600)                              # the model trace: every Nemotron call
+    mark("shelf", "trace")
+    await glide(page, W * 0.86, H * 0.45, steps=30)
+    await page.wait_for_timeout(6500)
+    await click(page, "#traceX", pause=800)
     mark("shelf", "end")
     await finish(pctx, "2_phone")
     await finish(ctx, "2_shelf")
@@ -222,6 +229,11 @@ async def scene_shelf_and_exit(pw):
         if i == 0:
             await click(page, "#queue .q", pause=2500)
         mark("exit", f"line{i}")
+        try:                                                               # Nemotron-3-Super reads the evidence
+            await page.wait_for_selector("#advice .advice .row", timeout=25000)
+            mark("exit", f"advice{i}")
+        except Exception:
+            pass
         await glide(page, W * 0.55, H * 0.42, steps=36)                    # look over the before/after evidence
         await page.wait_for_timeout(3500)
         await page.mouse.wheel(0, 380)
@@ -252,13 +264,49 @@ async def scene_shelf_and_exit(pw):
     await browser.close()
 
 
+async def scene_agents(pw):
+    """The shop assistant (Nemotron tool calls) and the end-of-day report (Nemotron-3-Ultra)."""
+    browser = await pw.chromium.launch()
+    ctx = await new_context(browser, "6_agents", {"ss_key": KEY})
+    page = await ctx.new_page()
+    start_clock("agents")
+    await page.goto(f"{BASE}/")
+    await page.wait_for_timeout(2000)
+    await page.locator("#asForm").scroll_into_view_if_needed()
+    await page.wait_for_timeout(800)
+    for k, q in enumerate(["What's running low?", "Which shelf had the most uncertain takes, and why?"]):
+        n = await page.locator("#asLog li.bot").count()
+        await click(page, f'#asChips button:has-text("{q}")', pause=300)
+        mark("agents", f"ask{k}")
+        await page.wait_for_function(f"document.querySelectorAll('#asLog li.bot .meta').length > {n}", timeout=45000)
+        mark("agents", f"answer{k}")
+        await page.locator("#asLog li.bot").last.scroll_into_view_if_needed()
+        await page.wait_for_timeout(5500)
+    await page.goto(f"{BASE}/layout")
+    await page.wait_for_timeout(1800)
+    await click(page, "#dayReport", pause=300)
+    mark("agents", "report_ask")
+    await page.wait_for_selector("#reportMount .rep, #reportMount pre", timeout=60000)
+    mark("agents", "report")
+    await page.locator("#reportMount").scroll_into_view_if_needed()
+    await glide(page, W * 0.85, H * 0.5, steps=30)
+    await page.wait_for_timeout(7000)
+    await page.mouse.wheel(0, 350)
+    await page.wait_for_timeout(4000)
+    mark("agents", "end")
+    await finish(ctx, "6_agents")
+    await browser.close()
+
+
 async def main():
     async with async_playwright() as pw:
-        which = os.environ.get("SCENES", "layout,shelf").split(",")
+        which = os.environ.get("SCENES", "layout,shelf,agents").split(",")
         if "layout" in which:
             await scene_layout(pw)
         if "shelf" in which:
             await scene_shelf_and_exit(pw)
+        if "agents" in which:
+            await scene_agents(pw)
         save_marks()
 
 
