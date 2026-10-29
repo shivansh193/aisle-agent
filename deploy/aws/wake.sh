@@ -20,8 +20,9 @@ aws iam put-role-policy --role-name "$NAME" --policy-name start-demo-instance --
     {\"Effect\":\"Allow\",\"Action\":\"ec2:DescribeInstances\",\"Resource\":\"*\"},
     {\"Effect\":\"Allow\",\"Action\":\"ec2:StartInstances\",\"Resource\":\"arn:aws:ec2:$REGION:$ACCOUNT:instance/$INSTANCE\"}]}"
 
-tmp=$(mktemp -d)
-python -m zipfile -c "$tmp/wake.zip" deploy/aws/wake/lambda_function.py
+tmp=deploy/aws/.wake_build                                       # relative: Windows python and aws see it too
+rm -rf "$tmp" && mkdir -p "$tmp"
+(cd deploy/aws/wake && python -m zipfile -c ../.wake_build/wake.zip lambda_function.py)     # handler at the zip root
 ENV="Variables={INSTANCE=$INSTANCE,APP_URL=https://$DOMAIN}"
 if aws lambda get-function --region "$REGION" --function-name "$NAME" >/dev/null 2>&1; then
   aws lambda update-function-code --region "$REGION" --function-name "$NAME" --zip-file "fileb://$tmp/wake.zip" >/dev/null
