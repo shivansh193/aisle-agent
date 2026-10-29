@@ -281,6 +281,15 @@ async def scene_agents(pw):
     await page.goto(f"{BASE}/")
     await page.wait_for_timeout(1500)
     await click(page, "#start", pause=4500)                                # live feed running while the owner asks
+    await page.evaluate("window.scrollTo({top: 0, behavior: 'smooth'})")
+    await page.wait_for_timeout(600)
+    await click(page, "#auditBtn", pause=300)                              # shelf audit: wrong shelf, price labels
+    mark("agents", "audit_ask")
+    await page.wait_for_selector("#auditMount .finding, #auditMount .fok", timeout=60000)
+    mark("agents", "audit")
+    await page.evaluate("document.getElementById('auditMount').scrollIntoView({block: 'center', behavior: 'smooth'})")
+    await glide(page, W * 0.45, H * 0.55, steps=30)
+    await page.wait_for_timeout(6000)
     await page.evaluate("document.getElementById('asForm').scrollIntoView({block: 'end', behavior: 'smooth'})")
     await page.wait_for_timeout(1200)
     for k, q in enumerate(["What's running low?", "Which shelf had the most uncertain takes, and why?"]):

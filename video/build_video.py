@@ -77,7 +77,7 @@ def plan(M):
     card("1", "Map the shop")
     c0 = t
     m0 = max(0.5, L["example"] - 1.0)
-    g = seg("4_layout.mp4", m0, m0 + 13.0)
+    g = seg("4_layout.mp4", m0, m0 + 12.0)
     cap(g + 0.2, "The owner maps the shop: shelves, fridges and freezers, with stock and minimums.")
     cap(g + L["shelf3"] - m0 - 3.4, "Aisle 2 is already low. Each shelf is tied to the camera zone that watches it.")
     chapters.append((c0, t, "1 · Shop layout"))
@@ -101,7 +101,7 @@ def plan(M):
     chapters.append((c0, t, "2 · Bill at the shelf"))
     shelf_chapter = chapters[-1]
 
-    slide("sC", 10.0, "How a take is decided", "Nemotron only runs when a hand visits a shelf", grid([
+    slide("sC", 9.0, "How a take is decided", "Nemotron only runs when a hand visits a shelf", grid([
         ("① Every frame · local", "Pose tracking finds wrists; a hand box sits just past the wrist. No API call per frame."),
         ("② A shelf visit", "The hand just before it entered and just after it left → <b class='g'>Nemotron-3.5-Super-VL</b>: holding a product?"),
         ("③ Logprobs, not text", "One answer token with <code>top_logprobs</code> → P(yes). Reasoning switched off so the answer is the first token."),
@@ -122,25 +122,30 @@ def plan(M):
     chapters.append((c0, t, "3 · Exit check"))
 
     A = M["agents"]
-    card("4", "Ask the shop")
+    card("4", "Audit and ask the shop")
     c0 = t
+    if "audit" in A:
+        u0 = A["audit_ask"] - 0.8
+        g = seg("6_agents.mp4", u0, A["audit"] + 6.5)
+        cap(g + 0.2, "Shelf audit: Nemotron VL checks each shelf against the layout and reads its price labels.")
+        cap(g + A["audit"] - u0 + 0.3, "A product that doesn't belong there is flagged for staff, with the shelf crop.")
     a0 = max(0.5, A["ask0"] - 1.6)
-    g = seg("6_agents.mp4", a0, A["answer1"] + 6.0)
+    g = seg("6_agents.mp4", a0, A["answer1"] + 5.0)
     cap(g + 0.2, "The owner asks. Nemotron answers with tool calls over live shop data.")
     cap(g + A["ask1"] - a0, "Lightning for quick lookups; Super for \"why\" questions.")
     r0 = A["report_ask"] - 0.8
     g = seg("6_agents.mp4", r0, min(A["end"], A["report"] + 10.0))
     cap(g + 0.2, "End of day: Nemotron-3-Ultra writes the report: sales, restock, uncertain takes.")
-    chapters.append((c0, t, "4 · Ask the shop"))
+    chapters.append((c0, t, "4 · Audit and ask"))
 
-    slide("sD", 10.0, "Results · measured, same items", "Hosted Nemotron vs a local 3B VLM", table([
+    slide("sD", 9.0, "Results · measured, same items", "Hosted Nemotron vs a local 3B VLM", table([
         ("Naming, shelf of 5 · clean photos", "<em>95.3%</em>", "90.3%"),
         ("Naming · CCTV-quality images", "<em>78.7%</em>", "65.7%"),
         ("Shelf watch · right at the alert threshold", "<em>83.3%</em>", "66.3%"),
         ("Takes on handheld stock clips (8 labelled)", "3 found · <w>still the weak point</w>", "2 found"),
         ("Latency per decision", "1.1–1.6 s", "0.3 s"),
     ]) + '<div class="foot it">GroceryStoreDataset · Retail Shelf Void Detection · Pexels clips · scripts and numbers in the repo</div>')
-    slide("sE", 9.0, "No GPU, small bill", "A CPU server plus Token Factory", grid([
+    slide("sE", 7.5, "No GPU, small bill", "A CPU server plus Token Factory", grid([
         ("Server", "<em>c7i.xlarge</em>, 4 vCPU, no GPU · about $0.18 an hour"),
         ("Every frame", "Pose tracking at <em>17 fps</em> (416 px) on CPU"),
         ("Per shop", "<em>$0.17</em> of Nemotron per 1,000 shelf visits"),
