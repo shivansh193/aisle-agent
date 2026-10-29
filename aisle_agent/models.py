@@ -423,27 +423,69 @@ class NemotronEngine(VjevEngine):
     def audit(self, crop_img, expected: List[str]) -> dict:
         """Shelf audit on one zone crop: is anything here not on this shelf's list (and what), and the
         price labels as read. Two or three Nemotron-3.5-Super-VL calls; reasoning off."""
-        import json as _json
-        import re as _re
-        from vjev.tokenfactory import BackendUnavailable, image_data_uri
-        listed = "; ".join(expected) if expected else "the products this shelf is meant to hold"
+        from vjev.tokenfactory import BackendUnavailable
         try:
-            q = (f"This shelf should hold only: {listed}. Is there clearly a product on it that is NOT one of those? "
-                 "Ignore empty space, shelf edges and price labels. Answer Yes or No.")
-            z = self.backend.next_token_logits(crop_img, q, ["Yes", "No"])
-            p = float(self.decider.cal.noul_platt([[float(z[0] - z[1])]])[0])
-            item = None
-            if p >= 0.5:
-                item = self.backend.describe(crop_img, f"Name the product on this shelf that is not one of: {listed}. "
-                                                       "Reply with its name only, in under 8 words.", max_tokens=24)
-            out = self.backend.client.chat(self.backend.model, [{"role": "user", "content": [
-                {"type": "image_url", "image_url": {"url": image_data_uri(crop_img, 1024)}},
-                {"type": "text", "text": "Read the shelf price labels you can see clearly. Reply with JSON only: "
-                                         '{"labels": [{"text": "words on the label", "price": 0}]}. '
-                                         'Use {"labels": []} if no price is readable. Never guess a price.'}]}],
-                purpose="audit-labels", max_tokens=200, temperature=0, **self.backend.extra)
+            misplaced = self.check_misplaced(crop_img, expected)
+            labels = self.read_labels(crop_img, expected)
         except BackendUnavailable as e:
             raise ModelUnavailable(str(e)) from e
+        return {"misplaced": misplaced, "labels": labels, "model": self.backend.model}
+
+    def check_misplaced(self, crop_img, expected: List[str]) -> dict:
+        """P(a product not on this shelf's list is on it), calibrated; if likely, its name ({"p", "item"})."""
+        listed = "; ".join(expected) if expected else "the products this shelf is meant to hold"
+        q = (f"This shelf should hold only: {listed}. Is there clearly a product on it that is NOT one of those? "
+             "Ignore empty space, shelf edges and price labels. Answer Yes or No.")
+        z = self.backend.next_token_logits(crop_img, q, ["Yes", "No"])
+        p = float(self.decider.cal.noul_platt([[float(z[0] - z[1])]])[0])
+        item = None
+        if p >= 0.5:
+            # JSON reply: asked for a bare name, Nemotron VL starts reasoning in the reply even with thinking off
+            import json as _json
+            import re as _re
+            from vjev.tokenfactory import image_data_uri
+            out = self.backend.client.chat(self.backend.model, [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": image_data_uri(crop_img, self.backend.max_side)}},
+                {"type": "text", "text": f"This shelf should hold only: {listed}. Which product on it is NOT one of those? "
+                                         'Reply with JSON only: {"product": "short name"}.'}]}],
+                purpose="audit-name", max_tokens=40, temperature=0, **self.backend.extra)
+            m = _re.search(r"\{.*?\}", out["choices"][0]["message"].get("content") or "", _re.S)
+            try:
+                item = str(_json.loads(m.group(0)).get("product") or "") if m else None
+            except (ValueError, AttributeError):
+                item = None
+        item = (item or "").strip(" .\n")
+        if not item or "this shelf" in item.lower() or item.lower().startswith(("the product", "none", "no ")):
+            item = None                                # the model echoed the question instead of naming something
+        return {"p": round(p, 4), "item": item[:60] if item else None}
+
+    def read_labels(self, crop_img, products: Optional[List[str]] = None) -> List[dict]:
+        """The shelf's price labels as Nemotron VL reads them: [{"text", "price"}], [] when none is legible.
+
+        Given the shelf's products, a second reading ties each label to one of them: picking from a short
+        list works from a partly legible name (the name on a label is printed far smaller than its price).
+        With a list in front of it the model also invents prices for labels it can't read, so a label from
+        that reading is kept only if the plain reading saw the same price (evals/audit)."""
+        plain = self._read_labels(crop_img, None)
+        if not products or not plain:
+            return plain
+        seen = [lab["price"] for lab in plain]
+        tied = [lab for lab in self._read_labels(crop_img, products) if any(abs(lab["price"] - s) < 0.5 for s in seen)]
+        return tied + [lab for lab in plain if not any(abs(lab["price"] - t["price"]) < 0.5 for t in tied)]
+
+    def _read_labels(self, crop_img, products: Optional[List[str]]) -> List[dict]:
+        import json as _json
+        import re as _re
+        from vjev.tokenfactory import image_data_uri
+        out = self.backend.client.chat(self.backend.model, [{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": image_data_uri(crop_img, 1024)}},
+            {"type": "text", "text": ("Read the shelf price labels you can see clearly. " + (
+                f"This shelf holds: {'; '.join(products)}. For each label, \"product\" is the one of those it names, "
+                "or null if you can't tell. Reply with JSON only: "
+                '{"labels": [{"text": "words on the label", "product": "name from the list", "price": 0}]}. '
+                if products else 'Reply with JSON only: {"labels": [{"text": "words on the label", "price": 0}]}. ')
+                + 'Use {"labels": []} if no price is readable. Never guess a price.')}]}],
+            purpose="audit-labels", max_tokens=200, temperature=0, **self.backend.extra)
         labels = []
         m = _re.search(r"\{.*\}", out["choices"][0]["message"].get("content") or "", _re.S)
         if m:
@@ -451,14 +493,14 @@ class NemotronEngine(VjevEngine):
                 for lab in _json.loads(m.group(0)).get("labels", [])[:12]:
                     price = float(str(lab.get("price", "")).replace(",", "").strip("₹Rs. ") or "nan")
                     if price == price and 0 < price < 100000:
-                        labels.append({"text": str(lab.get("text") or "")[:80], "price": round(price, 2)})
+                        text = str(lab.get("text") or "")[:80]
+                        named = str(lab.get("product") or "")
+                        if products and named in products:
+                            text = named                        # match_label then ties it to that product
+                        labels.append({"text": text, "price": round(price, 2)})
             except (ValueError, TypeError, AttributeError):
                 pass
-        item = (item or "").strip(" .\n")
-        if not item or "this shelf" in item.lower() or item.lower().startswith(("the product", "none", "no ")):
-            item = None                                # the model echoed the question instead of naming something
-        return {"misplaced": {"p": round(p, 4), "item": item[:60] if item else None},
-                "labels": labels, "model": self.backend.model}
+        return labels
 
     def trace(self) -> dict:
         c = self.backend.client

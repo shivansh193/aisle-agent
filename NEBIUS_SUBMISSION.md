@@ -24,8 +24,11 @@ over the shelves. Aisle Agent turns that camera into a checkout and a stock cler
   audit log, and the page shows how often the advisor and staff agree.
 - **The shopper's phone.** A QR code opens the shopper's own live bill, with a "Not mine" button.
 - **Shelf audit.** Between visits, Nemotron VL checks each shelf against the shop layout: it flags a
-  product that doesn't belong there (on the live footage, "Greek yogurt" on the Freezer shelf) and reads
-  the shelf price labels, flagging any that differ from what the bill charges. Staff resolve each finding.
+  product that doesn't belong there (on the live footage, "Greek yogurt" on the Freezer shelf, correctly:
+  the camera is on a yoghurt chiller) and reads the shelf price labels, flagging any that differ from what
+  the bill charges. Staff resolve each finding. On built test sets: 48/48 pasted-in products flagged with
+  0/48 false flags on clean shelves; price mismatches caught 26/26 (clean) and 24/26 (CCTV) when the price
+  digits are 24 px tall, with no false flags from 9 px up.
 - **Shelf watch and layout.** Between visits, the same camera reads how full each shelf is and
   raises restock alerts. A floor plan keeps stock per shelf.
 - **Ask the shop.** The owner asks "what's running low?" or "why were the takes on Aisle 2 uncertain?"
@@ -98,6 +101,16 @@ target, and real-shop footage is the next test. The full evaluation through Toke
 6. **Calibration on degraded images:** expected calibration error rose from 0.03 (clean) to 0.12 (CCTV
    quality). A published calibration note, or per-model temperature guidance, would help builders who
    use logprobs.
+7. **Capacity.** During one run of the shelf audit evaluation, 68 of 380 calls to Nemotron-3.5-Super-VL
+   failed with HTTP 529 (overloaded) after retries, and median latency went from 3.5 s to 11.6 s. Aisle
+   Agent treats a failed call as "unchecked" rather than guessing, but a status page or a Retry-After
+   header would help clients back off sensibly.
+8. **Thinking leaks into free-text replies.** With `enable_thinking: false`, a one-token Yes/No answers
+   directly, but "name the product, nothing else" often begins "The user wants me to…". Asking for JSON
+   (`{"product": "…"}`) fixed it; a note in the docs would save others the hunt.
+9. **Lists make the VL model fill in.** Given a shelf's product list, Nemotron VL tied labels to products
+   much better, but also invented prices for labels too small to read (25 of 53 labels at 6 px). Keeping
+   only prices a list-free reading also saw removed most of these.
 
 **Nebius AI Cloud:** not used this time; the app runs on a CPU VM elsewhere and calls Token Factory.
 
@@ -105,6 +118,7 @@ target, and real-shop footage is the next test. The full evaluation through Toke
 
 - Repo: https://github.com/shivansh193/aisle-agent
 - Video: (YouTube, under 3 min)
-- Live demo: https://3-232-60-58.sslip.io (shop key shared with judges in the testing notes)
+- Live demo: https://ci4lavcj7tszrydvwk3yxvt3em0xaeus.lambda-url.us-east-1.on.aws/ (the server sleeps when idle;
+  this link wakes it in about 20 s and forwards to the app. Shop key in the testing notes.)
 
 No affiliation with or endorsement by Nebius or NVIDIA.

@@ -1,0 +1,203 @@
+{
+ "price": {
+  "rows": [
+   {
+    "digit_px": 6,
+    "quality": "cctv",
+    "images": 32,
+    "prices_read": 0.0,
+    "labels_read_right": 0.0,
+    "mismatches_caught": "0/21",
+    "false_flags": "4/43",
+    "images_nothing_read": 0.781
+   },
+   {
+    "digit_px": 6,
+    "quality": "clean",
+    "images": 31,
+    "prices_read": 0.0,
+    "labels_read_right": 0.0,
+    "mismatches_caught": "1/21",
+    "false_flags": "4/41",
+    "images_nothing_read": 0.355
+   },
+   {
+    "digit_px": 9,
+    "quality": "cctv",
+    "images": 28,
+    "prices_read": 0.018,
+    "labels_read_right": 0.0,
+    "mismatches_caught": "0/13",
+    "false_flags": "0/43",
+    "images_nothing_read": 0.214
+   },
+   {
+    "digit_px": 9,
+    "quality": "clean",
+    "images": 30,
+    "prices_read": 0.683,
+    "labels_read_right": 0.0,
+    "mismatches_caught": "0/13",
+    "false_flags": "0/47",
+    "images_nothing_read": 0.067
+   },
+   {
+    "digit_px": 12,
+    "quality": "cctv",
+    "images": 34,
+    "prices_read": 0.897,
+    "labels_read_right": 0.0,
+    "mismatches_caught": "0/28",
+    "false_flags": "0/40",
+    "images_nothing_read": 0.0
+   },
+   {
+    "digit_px": 12,
+    "quality": "clean",
+    "images": 32,
+    "prices_read": 0.906,
+    "labels_read_right": 0.0,
+    "mismatches_caught": "0/26",
+    "false_flags": "0/38",
+    "images_nothing_read": 0.062
+   },
+   {
+    "digit_px": 16,
+    "quality": "cctv",
+    "images": 31,
+    "prices_read": 1.0,
+    "labels_read_right": 0.032,
+    "mismatches_caught": "1/22",
+    "false_flags": "1/40",
+    "images_nothing_read": 0.0
+   },
+   {
+    "digit_px": 16,
+    "quality": "clean",
+    "images": 31,
+    "prices_read": 0.935,
+    "labels_read_right": 0.694,
+    "mismatches_caught": "15/22",
+    "false_flags": "0/40",
+    "images_nothing_read": 0.032
+   },
+   {
+    "digit_px": 24,
+    "quality": "cctv",
+    "images": 33,
+    "prices_read": 1.0,
+    "labels_read_right": 0.909,
+    "mismatches_caught": "24/26",
+    "false_flags": "0/40",
+    "images_nothing_read": 0.0
+   },
+   {
+    "digit_px": 24,
+    "quality": "clean",
+    "images": 30,
+    "prices_read": 1.0,
+    "labels_read_right": 1.0,
+    "mismatches_caught": "26/26",
+    "false_flags": "0/34",
+    "images_nothing_read": 0.0
+   }
+  ],
+  "cost_usd": 0.2174,
+  "images": 380,
+  "failed_calls": 68,
+  "ms_p50": 11579
+ },
+ "misplaced": {
+  "cases": {
+   "clean": {
+    "n": 48,
+    "flagged_at_0.6": 0.0,
+    "p_median": 0.378,
+    "flagged_at_0.5": 0.458
+   },
+   "pasted": {
+    "n": 48,
+    "flagged_at_0.6": 1.0,
+    "p_median": 0.953,
+    "named_right": "33/48",
+    "auroc_vs_clean": 1.0
+   },
+   "layout_wrong": {
+    "n": 48,
+    "flagged_at_0.6": 1.0,
+    "p_median": 0.924,
+    "named_right": "48/48",
+    "auroc_vs_clean": 1.0
+   }
+  },
+  "cost_usd": 0.0286,
+  "items": 144,
+  "ms_p50": 4411,
+  "named_examples": [
+   [
+    "Pomegranate",
+    "apples"
+   ],
+   [
+    "layout_wrong",
+    "yogurt"
+   ],
+   [
+    "Conference",
+    "pears"
+   ],
+   [
+    "layout_wrong",
+    "Greek yogurt"
+   ],
+   [
+    "Sweet Potato",
+    "potatoes"
+   ],
+   [
+    "layout_wrong",
+    "yogurt"
+   ],
+   [
+    "clean",
+    "Nada Greek Yogurt"
+   ],
+   [
+    "Pink Lady",
+    "apples"
+   ],
+   [
+    "layout_wrong",
+    "yogurt"
+   ],
+   [
+    "Solid Potato",
+    "potatoes"
+   ],
+   [
+    "layout_wrong",
+    "Greek Yogurt"
+   ],
+   [
+    "Vine Tomato",
+    "tomatoes"
+   ],
+   [
+    "layout_wrong",
+    "yogurt"
+   ],
+   [
+    "Vine Tomato",
+    "tomatoes"
+   ],
+   [
+    "layout_wrong",
+    "yogurt"
+   ],
+   [
+    "Yellow Onion",
+    "onions"
+   ]
+  ]
+ }
+}

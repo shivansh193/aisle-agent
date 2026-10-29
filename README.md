@@ -64,18 +64,48 @@ decisions** (yes/no, choice, score, box) instead of free text. The new
 Between visits, Nemotron-3.5-Super-VL audits each shelf zone against the shop layout:
 
 - **Wrong shelf:** "This shelf should hold only: … Is there clearly a product on it that is NOT one of those?"
-  This is a calibrated yes/no from logprobs. If yes, a short follow-up names the product. On the live
-  freezer footage it flagged "Greek yogurt" on the Freezer shelf (P 0.88) in 4.2 s.
-- **Price labels:** the shelf crop is sent at a higher resolution, and Nemotron returns the labels it can
-  read as JSON (`{"labels": [{"text", "price"}]}`), told never to guess a price. Each label is matched to
-  a product on that shelf by its words and compared with the catalogue price the bill charges. A mismatch
-  is a finding, because a shopper who trusts the label would be charged a different price.
+  This is a calibrated yes/no from logprobs. If yes, a follow-up names the product, as JSON (asked for a
+  bare name, Nemotron VL starts reasoning in its reply even with thinking off). On the live footage it
+  flagged "Greek yogurt" on the Freezer shelf (P 0.88). That was right: the demo layout lists frozen food
+  for that zone, but the camera is on a yoghurt chiller.
+- **Price labels:** Nemotron reads the labels it can see as JSON, told never to guess a price. A second
+  reading is given the shelf's product list, to tie each label to a product: the name on a label is
+  printed far smaller than its price, and picking from a short list works from a partly legible name.
+  With a list in front of it the model also invents prices for labels it can't read, so a tied label is
+  kept only if the plain reading saw the same price. A label whose price differs from the catalogue
+  price the bill charges is a finding.
 
 Findings carry the shelf crop and go to the console, the layout plan and the assistant. Staff resolve
-them: moved it back, it belongs here, label fixed, or charge the label price (which updates the
-catalogue). **Not yet evaluated on a labelled set:** price reading depends on the labels being legible
-to the camera. On our freezer footage the tags are too small and nothing is read, which is the correct
-behaviour.
+them: moved it back, it belongs here, label fixed, or charge the label price (which updates the catalogue).
+
+**Evaluated** ([evals/audit](evals/audit/audit_eval.py)). There is no public set of shelf photos with known
+label prices, so the test sets are built: printed ₹ labels pasted onto 38 real shelf photos (Retail Shelf
+Void Detection, and the demo footage), at five sizes, clean and CCTV-degraded, 30% of them with a price
+that differs from the catalogue; and crops of the demo footage with and without a pasted non-dairy
+product. Run through the app's own audit code:
+
+| Price digit height in the image | Prices read (clean / CCTV) | Mismatches caught (clean / CCTV) | False flags |
+|---|---|---|---|
+| 6 px | 0% / 0% | 1/21 / 0/21 | 4/41 / 4/43 |
+| 9 px | 68% / 2% | 0/13 / 0/13 | 0 / 0 |
+| 12 px | 91% / 90% | 0/26 / 0/28 | 0 / 0 |
+| 16 px | 94% / 100% | 15/22 / 1/22 | 0 / 1 |
+| 24 px | 100% / 100% | 26/26 / 24/26 | 0 / 0 |
+
+Prices are read from about 12 px; tying a label to its product needs its name legible too, from about
+16 px clean or 24 px on a CCTV-quality camera. Below that, a few labels the model can't read still turn
+into false flags (about 1 in 10 labels at 6 px), so staff confirm each finding. 312 of 380 images
+scored: 68 calls failed with HTTP 529 (Token Factory overloaded) and are left out.
+
+| Wrong shelf (yoghurt chiller, 48 crops each) | Flagged at P ≥ 0.6 | Named right |
+|---|---|---|
+| Clean shelf, correct list (false flags) | 0/48 | – |
+| A product photo pasted on | 48/48 | 33/48 (e.g. "apples" for a pomegranate) |
+| Real shelf, wrong layout list | 48/48 | 48/48 |
+
+The pasted products are cut-out rectangles, easier to spot than a real misplaced item. On clean shelves
+the median P is 0.38 and 46% are at 0.5 or above: the 0.6 threshold is doing real work. The demo footage
+is one shelf, so this is a first check, not a field result. Both sets together cost $0.25 through Token Factory.
 
 ## Results
 
