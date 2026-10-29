@@ -65,7 +65,7 @@
       <form id="asForm" class="asform"><label class="sr" for="asQ">Question</label>
         <input class="field" id="asQ" placeholder="What's running low?" autocomplete="off"><button class="btn ink" id="asGo">Ask</button></form>
     </section>`;
-    const ex = ["What's running low?", "Which shelf had the most uncertain takes, and why?", "Summarise today's exit checks."];
+    const ex = ["What's running low?", "Which shelf had the most uncertain takes, and why?", "Any price labels wrong?"];
     $("asChips").innerHTML = ex.map((q) => `<button type="button" class="chip">${esc(q)}</button>`).join("");
     $("asChips").onclick = (e) => { const b = e.target.closest("button"); if (b) { $("asQ").value = b.textContent; ask(); } };
     $("asForm").onsubmit = (e) => { e.preventDefault(); ask(); };
@@ -141,5 +141,63 @@
     };
   }
 
-  badge(); assistant(); agreement(); dayReport();
+  // ---- shelf audit (console and layout): wrong-shelf products, price labels
+  const TAG = {misplaced: ["wrong shelf", "bad"], price: ["price label", "warn"]};
+  const ACTIONS = {misplaced: [["moved", "Moved it back", true], ["belongs", "It belongs here", false]],
+                   price: [["label_fixed", "Label fixed", true], ["use_label_price", "Charge the label price", false]]};
+  const capital = (x) => { x = String(x ?? ""); return x.charAt(0).toUpperCase() + x.slice(1); };
+  function findingText(f) {
+    if (f.kind === "misplaced") return `${esc(capital(f.item))}, not on this shelf&rsquo;s list${f.expected && f.expected.length ? ` (${esc(f.expected.join(", "))})` : ""}.`;
+    return `The label reads <b class="mono">₹${esc(f.label_price)}</b>; the bill charges <b class="mono">₹${esc(f.catalogue_price)}</b> for ${esc(f.product)}.`;
+  }
+  function findingMeta(f) {
+    return f.kind === "misplaced" ? `P(not stocked here) ${Number(f.p).toFixed(2)} · seen ${f.seen > 1 ? f.seen + " times in a row" : "once"}`
+      : `read from the label: &ldquo;${esc(f.label_text || "")}&rdquo;`;
+  }
+  const INTRO = "While no hand is on a shelf, the camera checks that each shelf holds only its own products and that its price labels match the catalogue.";
+  async function loadAudit() {
+    const mount = $("auditMount"); if (!mount) return;
+    let data;
+    try { const r = await fetch("/v1/audit", {headers: hdr()}); if (!r.ok) return; data = await r.json(); } catch (e) { return; }
+    const chip = $("auditChip");
+    if (chip) { chip.hidden = !data.open; chip.textContent = `audit ${data.open} finding${data.open === 1 ? "" : "s"}`; }
+    if (!data.audits.length) {
+      mount.innerHTML = `<section class="card white audit" aria-labelledby="au-h"><div class="row"><h2 id="au-h">Shelf audit</h2><span class="mono muted">Nemotron-3.5-Super-VL</span></div>
+        <p class="muted" style="margin:6px 0 0">${INTRO} Press &ldquo;Audit shelves&rdquo; to run it now.</p></section>`;
+      return;
+    }
+    const last = data.audits[0];
+    const rows = data.audits.flatMap((a) => a.findings.map((f) => ({a, f})));
+    const okZones = data.audits.filter((a) => !a.findings.length && !a.error);
+    mount.innerHTML = `<section class="card white audit" aria-labelledby="au-h">
+      <div class="row"><h2 id="au-h">Shelf audit</h2><span class="mono muted">${esc(short(last.model || ""))} · ${data.open} open</span></div>
+      <p class="muted" style="margin:6px 0 4px">${INTRO}</p>
+      ${rows.map(({a, f}) => `<div class="finding"><div class="thumb">${a.crop ? `<img src="${a.crop}" alt="${esc(a.zone)} shelf when audited">` : ""}</div>
+        <div class="fbody"><div class="ftop"><span class="chip ${TAG[f.kind][1]}">${TAG[f.kind][0]}</span><b>${esc(a.zone)}</b></div>
+          <div class="ftext">${findingText(f)}</div><div class="mono muted fmeta">${findingMeta(f)}</div></div>
+        <div class="facts">${ACTIONS[f.kind].map(([act, label, main]) => `<button type="button" class="btn ${main ? "" : "plain"}" data-s="${esc(a.session)}" data-z="${esc(a.zone)}" data-i="${f.idx}" data-a="${act}">${label}</button>`).join("")}</div></div>`).join("")}
+      ${okZones.map((a) => `<div class="fok"><span><b>${esc(a.zone)}</b> · all products on their shelf${a.labels && a.labels.length ? ` · ${a.labels.length} label${a.labels.length > 1 ? "s" : ""} match` : ""}</span><span class="mono muted">ok</span></div>`).join("")}
+      ${data.audits.filter((a) => a.error).map((a) => `<div class="fok"><span><b>${esc(a.zone)}</b> · not checked: model unavailable</span><span class="mono muted">retry</span></div>`).join("")}
+    </section>`;
+    mount.querySelectorAll("button[data-a]").forEach((b) => b.onclick = async () => {
+      b.disabled = true;
+      await fetch("/v1/audit/resolve", {method: "POST", headers: hdr({"Content-Type": "application/json"}),
+        body: JSON.stringify({session: b.dataset.s, zone: b.dataset.z, idx: Number(b.dataset.i), action: b.dataset.a})});
+      loadAudit(); if (window.onAudit) window.onAudit();
+    });
+  }
+  window.loadAudit = loadAudit;
+  function auditButton() {
+    const b = $("auditBtn"); if (!b) return;
+    b.onclick = async () => {
+      b.disabled = true; const label = b.textContent; b.textContent = "Auditing…";
+      const sid = (typeof session !== "undefined" && session) ? session.session_id : null;
+      try { await fetch(sid ? `/v1/sessions/${sid}/audit` : "/v1/audit/run", {method: "POST", headers: hdr()}); } catch (e) {}
+      for (let i = 0; i < 12; i++) { await new Promise((r) => setTimeout(r, 1500)); await loadAudit(); if (window.onAudit) window.onAudit(); }
+      b.textContent = label; b.disabled = false;
+    };
+  }
+  if ($("auditMount")) { loadAudit(); setInterval(loadAudit, 6000); }
+
+  badge(); assistant(); agreement(); dayReport(); auditButton();
 })();

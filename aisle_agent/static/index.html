@@ -25,7 +25,8 @@
       <span class="status idle" id="liveTxt"><span class="dot" id="dot2"></span>not running</span>
       <span class="mono muted" id="srcMeta"></span>
       <div class="ctl">
-                <button class="btn ink" id="start">Start</button>
+        <button class="btn" id="auditBtn" type="button">Audit shelves</button>
+        <button class="btn ink" id="start">Start</button>
         <button class="btn line" id="stop">Stop</button>
       </div>
     </div>
@@ -35,9 +36,10 @@
       <img id="remote" alt="Live camera feed">
       <canvas id="overlay"></canvas>
       <div class="empty" id="empty"><b>No feed yet</b><span>Press Start. Draw your shelf zones on the picture once it's live.</span></div>
-      <div class="hud tr"><span><span id="fps">–</span> fps analysed</span><span><span id="nShop">0</span> shoppers</span><span>take → bill <span id="lat">–</span></span></div>
+      <div class="hud tr"><span><span id="fps">–</span> fps analysed</span><span><span id="nShop">0</span> shoppers</span><span>take → bill <span id="lat">–</span></span><span id="auditChip" hidden></span></div>
       <figcaption class="hud bl"><span id="srcChip">this device</span></figcaption>
     </figure>
+    <div id="auditMount"></div>
 
     <div class="card reveal" id="srcDevice">
       <div class="cols" style="gap:16px">

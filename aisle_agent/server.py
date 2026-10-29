@@ -111,12 +111,16 @@ def create_app(engine, max_sessions: int = 4, layout=None, agents=None) -> FastA
     from collections import deque
     events_log: deque = deque(maxlen=500)          # recent takes, put-backs, unchecked visits, alerts (all sessions)
     decisions: List[dict] = []                     # exit-check decisions with the agent's advice
+    audit_store: Dict[tuple, dict] = {}            # (session, zone) -> latest shelf audit, with resolved findings
     app.state.agents = agents if agents is not None else make_agents(engine)
 
     def log_events(sid, msgs):
         for m in msgs:
-            if m.get("type") in ("take", "put", "line", "unchecked", "restock", "dispute", "review"):
-                e = {k: v for k, v in m.items() if k not in ("bill", "candidates")}
+            if m.get("type") == "audit":
+                audit_store[(sid, m["zone"])] = dict(m, session=sid, resolved=[])
+            if m.get("type") in ("take", "put", "line", "unchecked", "restock", "dispute", "review", "misplaced",
+                                 "price_mismatch"):
+                e = {k: v for k, v in m.items() if k not in ("bill", "candidates", "crop", "expected")}
                 if "line" in e:
                     e["line"] = {k: e["line"].get(k) for k in ("id", "name", "sku", "status", "zone", "confidence", "note")}
                 events_log.append({"session": sid, "at": round(time.time(), 1), **e})
@@ -414,6 +418,57 @@ def create_app(engine, max_sessions: int = 4, layout=None, agents=None) -> FastA
         except Exception as e:                         # the advisor being down never blocks the exit check
             raise HTTPException(503, f"advisor unavailable: {str(e)[:120]}")
 
+    # ---- shelf audit: wrong-shelf products and price labels (Nemotron VL), findings for staff
+    def open_findings(a):
+        return [f for i, f in enumerate(a["findings"]) if i not in a["resolved"]]
+
+    @app.post("/v1/sessions/{sid}/audit")
+    def audit_session(sid: str):
+        get(sid).request_audit()
+        return {"queued": [z.id for z in get(sid).zones]}
+
+    @app.post("/v1/audit/run")
+    def audit_all():
+        for x in sessions.values():
+            x.request_audit()
+        return {"sessions": list(sessions)}
+
+    @app.get("/v1/audit")
+    def audit_list():
+        out = []
+        for (sid, zone), a in sorted(audit_store.items(), key=lambda kv: -kv[1]["t"]):
+            if sid in sessions:
+                out.append({"session": sid, "zone": zone, "t": a["t"], "model": a.get("model"), "crop": a.get("crop"),
+                            "labels": a.get("labels"), "p_misplaced": a.get("p_misplaced"), "error": a.get("error"),
+                            "findings": [dict(f, idx=i) for i, f in enumerate(a["findings"]) if i not in a["resolved"]]})
+        return {"audits": out, "open": sum(len(x["findings"]) for x in out)}
+
+    @app.post("/v1/audit/resolve")
+    def audit_resolve(body: dict = Body(...)):
+        """{session, zone, idx, action}: moved | belongs | label_fixed | use_label_price (sets the catalogue price)."""
+        a = audit_store.get((body.get("session"), body.get("zone")))
+        if a is None:
+            raise HTTPException(404, "no such audit")
+        try:
+            i = int(body.get("idx"))
+            f = a["findings"][i]
+        except (TypeError, ValueError, IndexError):
+            raise HTTPException(400, "no such finding")
+        action = body.get("action")
+        if action not in ("moved", "belongs", "label_fixed", "use_label_price"):
+            raise HTTPException(400, "action must be moved, belongs, label_fixed or use_label_price")
+        if action == "use_label_price" and f["kind"] == "price":
+            s = sessions[body["session"]]
+            prod = s.catalogue.by_sku.get(f["sku"])
+            if prod is not None:
+                prod.price = float(f["label_price"])
+            shop.set_price(f["sku"], float(f["label_price"]))
+        if i not in a["resolved"]:
+            a["resolved"].append(i)
+        shop.observe(body["session"], [{"type": "audit", "zone": a["zone"], "findings": open_findings(a)}])
+        sessions[body["session"]].publish([{"type": "audit_resolved", "zone": a["zone"], "kind": f["kind"], "action": action}])
+        return audit_list()
+
     @app.get("/v1/agents/stats")
     def agent_stats():
         judged = [d for d in decisions if d.get("advice") in ("keep", "remove")]
@@ -469,6 +524,10 @@ def create_app(engine, max_sessions: int = 4, layout=None, agents=None) -> FastA
     def t_decisions():
         return agent_stats()
 
+    def t_audit():
+        return [{"zone": x["zone"], "findings": [{k: v for k, v in f.items() if k not in ("expected", "idx")} for f in x["findings"]],
+                 "labels_read": x["labels"]} for x in audit_list()["audits"]]
+
     def t_layout():
         v = shop.view()
         return {"shop": v["name"], "shelves": [{"name": x["name"], "kind": x["kind"], "zone": x.get("zone") or x["name"],
@@ -502,7 +561,7 @@ def create_app(engine, max_sessions: int = 4, layout=None, agents=None) -> FastA
         app.state.agents.assistant = ShopAssistant(app.state.agents.client, {
             "get_sessions": t_sessions, "get_bill": t_bill, "get_events": t_events, "get_stock": t_stock,
             "get_restock_alerts": t_restock, "get_exit_decisions": t_decisions, "get_layout": t_layout,
-            "get_uncertainty": t_uncertainty}, tool_schemas())
+            "get_uncertainty": t_uncertainty, "get_audit": t_audit}, tool_schemas())
 
     @app.post("/v1/report")
     def day_report():
@@ -511,7 +570,7 @@ def create_app(engine, max_sessions: int = 4, layout=None, agents=None) -> FastA
         if ag is None:
             raise HTTPException(503, "the report needs a Token Factory key (TOKEN_FACTORY_API_KEY)")
         from .agents import DayReport
-        snap = {"bills": [t_bill(sid) for sid in sessions], "events": t_events(200), "stock": t_stock(),
+        snap = {"bills": [t_bill(sid) for sid in sessions], "events": t_events(200), "stock": t_stock(), "audit": t_audit(),
                 "restock": t_restock(), "exit_decisions": agent_stats(), "uncertainty": t_uncertainty()}
         try:
             return DayReport(ag.client).write(snap)

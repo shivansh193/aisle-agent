@@ -271,3 +271,26 @@ class StockWatch:
 
     def as_dict(self) -> Dict[str, dict]:
         return {z: {k: v for k, v in s.items() if k != "below"} for z, s in self.state.items()}
+
+
+def _tokens(text: str) -> set:
+    import re
+    stop = {"a", "an", "the", "of", "or", "and", "pack", "packet", "box", "jar", "tub", "bottle", "carton", "tray", "cup", "bag"}
+    return {w for w in re.findall(r"[a-z0-9]+", (text or "").lower()) if w not in stop and not w.isdigit()}
+
+
+def match_label(text: str, products: List["Product"]) -> Optional["Product"]:
+    """The product a shelf price label most likely names (word overlap), or the only product on the shelf."""
+    if len(products) == 1 and not text:
+        return products[0]
+    words = _tokens(text)
+    best, score = None, 0.0
+    for p in products:
+        pw = _tokens(p.name) | _tokens(p.sku)
+        if words and pw:
+            j = len(words & pw) / len(words | pw)
+            if j > score:
+                best, score = p, j
+    if best is not None and score >= 0.25:
+        return best
+    return products[0] if len(products) == 1 else None

@@ -209,4 +209,5 @@ def tool_schemas() -> List[dict]:
         fn("get_exit_decisions", "Staff decisions at the exit check (keep/remove), with the agent's advice and agreement."),
         fn("get_layout", "The shop layout: shelves, their products and the camera zone that watches each."),
         fn("get_uncertainty", "Per zone: how many takes were uncertain (verify at exit), disputed or unchecked, and why."),
+        fn("get_audit", "Shelf audit: products on the wrong shelf, and shelf price labels that don't match the catalogue."),
     ]

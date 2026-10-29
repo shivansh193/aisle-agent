@@ -420,6 +420,46 @@ class NemotronEngine(VjevEngine):
         res["method"] = res["method"] + "+nemotron"
         return res
 
+    def audit(self, crop_img, expected: List[str]) -> dict:
+        """Shelf audit on one zone crop: is anything here not on this shelf's list (and what), and the
+        price labels as read. Two or three Nemotron-3.5-Super-VL calls; reasoning off."""
+        import json as _json
+        import re as _re
+        from vjev.tokenfactory import BackendUnavailable, image_data_uri
+        listed = "; ".join(expected) if expected else "the products this shelf is meant to hold"
+        try:
+            q = (f"This shelf should hold only: {listed}. Is there clearly a product on it that is NOT one of those? "
+                 "Ignore empty space, shelf edges and price labels. Answer Yes or No.")
+            z = self.backend.next_token_logits(crop_img, q, ["Yes", "No"])
+            p = float(self.decider.cal.noul_platt([[float(z[0] - z[1])]])[0])
+            item = None
+            if p >= 0.5:
+                item = self.backend.describe(crop_img, f"Name the product on this shelf that is not one of: {listed}. "
+                                                       "Reply with its name only, in under 8 words.", max_tokens=24)
+            out = self.backend.client.chat(self.backend.model, [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": image_data_uri(crop_img, 1024)}},
+                {"type": "text", "text": "Read the shelf price labels you can see clearly. Reply with JSON only: "
+                                         '{"labels": [{"text": "words on the label", "price": 0}]}. '
+                                         'Use {"labels": []} if no price is readable. Never guess a price.'}]}],
+                purpose="audit-labels", max_tokens=200, temperature=0, **self.backend.extra)
+        except BackendUnavailable as e:
+            raise ModelUnavailable(str(e)) from e
+        labels = []
+        m = _re.search(r"\{.*\}", out["choices"][0]["message"].get("content") or "", _re.S)
+        if m:
+            try:
+                for lab in _json.loads(m.group(0)).get("labels", [])[:12]:
+                    price = float(str(lab.get("price", "")).replace(",", "").strip("₹Rs. ") or "nan")
+                    if price == price and 0 < price < 100000:
+                        labels.append({"text": str(lab.get("text") or "")[:80], "price": round(price, 2)})
+            except (ValueError, TypeError, AttributeError):
+                pass
+        item = (item or "").strip(" .\n")
+        if not item or "this shelf" in item.lower() or item.lower().startswith(("the product", "none", "no ")):
+            item = None                                # the model echoed the question instead of naming something
+        return {"misplaced": {"p": round(p, 4), "item": item[:60] if item else None},
+                "labels": labels, "model": self.backend.model}
+
     def trace(self) -> dict:
         c = self.backend.client
         return {"engine": self.label, "naming": self.naming, "usage": dict(c.usage), "calls": list(c.trace)[-50:],
@@ -484,6 +524,11 @@ class StubEngine:
     def stock(self, crops):
         return [{lv: (1.0 if lv == self.stock_fn(c.info.get("t", self.frame_time)) else 0.0) for lv in STOCK_LEVELS}
                 for c in crops]
+
+    def audit(self, crop_img, expected):
+        """Scripted shelf audit (tests, UI work): `audit_fn(t)` -> the audit dict, else nothing found."""
+        fn = getattr(self, "audit_fn", None)
+        return fn(self.frame_time) if fn else {"misplaced": {"p": 0.0, "item": None}, "labels": [], "model": "stub"}
 
     def identify(self, frame, track, catalogue, region=None):
         if self.identify_s:

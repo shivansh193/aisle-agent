@@ -138,3 +138,18 @@ details.card > summary::-webkit-details-marker { display:none; }
 .advice .caps { margin:8px 0 0; padding-left:16px; font-size:13px; color:var(--ink2); }
 .h3r { margin:14px 0 4px; font:500 11px var(--mono); letter-spacing:.8px; text-transform:uppercase; color:var(--muted); }
 .rep { margin:4px 0 0; padding-left:16px; font-size:14px; } .rep li { margin:3px 0; }
+
+/* shelf audit */
+.finding { display:grid; grid-template-columns:96px minmax(0,1fr) auto; gap:14px; align-items:center; padding:12px; border:1px solid var(--rule2); border-radius:10px; margin-top:10px; }
+.finding .thumb { width:96px; height:72px; border-radius:8px; background:var(--screen); overflow:hidden; }
+.finding .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.finding .ftop { display:flex; gap:8px; align-items:center; flex-wrap:wrap; } .finding .ftop b { font-size:15px; }
+.finding .ftext { margin-top:4px; font-size:14px; } .finding .fmeta { margin-top:4px; font-size:12px; }
+.finding .facts { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.finding .facts .btn { min-height:40px; padding:0 12px; font-size:13px; }
+.btn.plain { border-color:transparent; background:none; color:var(--muted); font-weight:500; }
+.fok { display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border-radius:10px; background:var(--paper); font-size:13.5px; color:var(--ink2); margin-top:10px; flex-wrap:wrap; }
+.fok b { color:var(--green); }
+.audit .chip { font:600 11.5px var(--mono); border-radius:999px; padding:2px 8px; }
+.audit .chip.bad { background:var(--red-bg); color:var(--red); } .audit .chip.warn { background:var(--amber-bg); color:var(--amber-ink); }
+@media (max-width: 760px) { .finding { grid-template-columns:72px minmax(0,1fr); } .finding .thumb { width:72px; height:56px; } .finding .facts { grid-column:1 / -1; justify-content:flex-start; } }

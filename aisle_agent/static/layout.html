@@ -53,7 +53,7 @@
   <div class="pagehead">
     <h1>Shop layout</h1>
     <div class="stats" id="stats"></div>
-    <div class="ctl"><span class="saved" id="saved"></span><input class="field" id="key" type="password" placeholder="Shop key" style="width:150px; min-height:44px"><button class="btn" id="dayReport">End-of-day report</button><button class="btn ink" id="save">Save layout</button></div>
+    <div class="ctl"><span class="saved" id="saved"></span><input class="field" id="key" type="password" placeholder="Shop key" style="width:150px; min-height:44px"><button class="btn" id="auditBtn" type="button">Audit shelves</button><button class="btn" id="dayReport">End-of-day report</button><button class="btn ink" id="save">Save layout</button></div>
   </div>
 
   <div class="cols" style="margin-top:20px">
@@ -142,7 +142,8 @@ function drawPlan() {
   for (let x = 1; x < W; x++) g += `<line class="gl" x1="${x}" y1="0" x2="${x}" y2="${H}"/>`;
   for (let y = 1; y < H; y++) g += `<line class="gl" x1="0" y1="${y}" x2="${W}" y2="${y}"/>`;
   L.shelves.forEach((s, i) => {
-    const st = viewOf(s), stroke = ["counter", "entrance"].includes(s.kind) ? "#CFC9BB" : STATE[st][0];
+    const st = viewOf(s), nf = (s.findings || []).length;
+    const stroke = nf ? "#B42318" : ["counter", "entrance"].includes(s.kind) ? "#CFC9BB" : STATE[st][0];
     const units = s.items.reduce((a, b) => a + b.qty, 0), tall = s.h >= 3;
     const fs = Math.min(0.8, tall ? s.h * 0.34 : s.h * 0.42, s.w / Math.max(6, s.name.length) * (tall ? 1.6 : 0.9));
     g += `<g class="s${sel === i ? " sel" : ""}" data-i="${i}">
@@ -153,6 +154,7 @@ function drawPlan() {
         ${s.zone ? `<text x="${s.x + s.w - .4}" y="${s.y + .45 + fs}" font-size="${Math.min(.55, fs * .8)}" text-anchor="end" fill="#5B5F66">◉ ${esc(s.zone)}</text>` : ""}`
       : `<text x="${s.x + .45}" y="${s.y + s.h / 2 + fs * .36}" font-size="${fs}" font-weight="600" fill="#17181A">${s.zone ? "◉ " : ""}${esc(s.name)}</text>
         ${s.items.length && s.w >= 7 ? `<text x="${s.x + s.w - .4}" y="${s.y + s.h / 2 + fs * .32}" font-size="${fs * .82}" text-anchor="end" fill="${STATE[st][0]}">${units} · ${STATE[st][1]}</text>` : ""}`}
+      ${nf ? `<circle cx="${s.x + s.w - .1}" cy="${s.y + .1}" r=".55" fill="#B42318"/><text x="${s.x + s.w - .1}" y="${s.y + .1 + .22}" font-size=".6" font-weight="700" text-anchor="middle" fill="#FFFFFF">${nf}</text>` : ""}
       ${sel === i ? `<rect class="rz" data-rz="${i}" x="${s.x + s.w - .55}" y="${s.y + s.h - .55}" width=".5" height=".5" rx=".1"/>` : ""}
     </g>`;
   });
@@ -250,15 +252,21 @@ function summary() {
   const names = Object.fromEntries(L.products.map((p) => [p.sku, p]));
   const units = L.shelves.reduce((a, s) => a + s.items.reduce((b, i) => b + i.qty, 0), 0);
   const value = L.shelves.reduce((a, s) => a + s.items.reduce((b, i) => b + i.qty * ((names[i.sku] || {}).price || 0), 0), 0);
+  const nfind = L.shelves.reduce((a, s) => a + (s.findings || []).length, 0);
   const states = L.shelves.map(viewOf), low = states.filter((x) => x === "low" || x === "alert").length, empty = states.filter((x) => x === "empty").length;
   $("stats").innerHTML = `<div><b>${L.shelves.length}</b>shelves</div><div><b>${units}</b>units</div><div><b>${fmt(value)}</b>on the shelves</div>
-    <div class="${low ? "warn" : ""}"><b>${low}</b>low</div><div class="${empty ? "bad" : ""}"><b>${empty}</b>empty</div>`;
+    <div class="${low ? "warn" : ""}"><b>${low}</b>low</div><div class="${empty ? "bad" : ""}"><b>${empty}</b>empty</div>
+    <div class="${nfind ? "bad" : ""}"><b>${nfind}</b>audit findings</div>`;
   const need = L.shelves.map((s, i) => [s, i, viewOf(s)]).filter(([, , st]) => st !== "ok" && st);
-  $("attn").innerHTML = need.filter(([s]) => s.items.length || s.alert).map(([s, i, st]) => {
+  const auditRows = L.shelves.flatMap((s, i) => (s.findings || []).map((f) => `<div class="att"><div><b style="font-size:14px">${esc(s.name)}</b>
+      <span class="chip ${f.kind === "price" ? "low" : "empty"}">${f.kind === "price" ? "price label" : "wrong shelf"}</span>
+      <div class="hint" style="margin:3px 0 0">${f.kind === "price" ? esc(`${cap(f.product)}: label ₹${f.label_price}, catalogue ₹${f.catalogue_price}`) : esc(`${cap(f.item || "an unlisted product")} isn't on its list`)}</div></div>
+      <button class="btn" data-sel="${i}">Open</button></div>`)).join("");
+  $("attn").innerHTML = auditRows + need.filter(([s]) => s.items.length || s.alert).map(([s, i, st]) => {
     const lowItems = s.items.filter((it) => it.qty <= it.min).map((it) => `${cap((names[it.sku] || {}).name || it.sku)} (${it.qty})`);
     return `<div class="att"><div><b style="font-size:14px">${esc(s.name)}</b> <span class="chip ${st}">${STATE[st][1]}</span>
       <div class="hint" style="margin:3px 0 0">${esc(lowItems.join(", ") || (s.alert ? "the camera sees it running low" : ""))}</div></div>
-      <button class="btn" data-sel="${i}">Open</button></div>`; }).join("") || '<p class="muted">Every shelf is stocked.</p>';
+      <button class="btn" data-sel="${i}">Open</button></div>`; }).join("") || (auditRows ? "" : '<p class="muted">Every shelf is stocked and in order.</p>');
   $("attn").querySelectorAll("[data-sel]").forEach((b) => b.onclick = () => { sel = Number(b.dataset.sel); render(); });
   $("moves").innerHTML = (L.log || []).slice().reverse().slice(0, 12).map((m) => {
     const sh = L.shelves.find((s) => s.id === m.shelf);
@@ -295,12 +303,13 @@ setInterval(async () => {          // stock moves live while sessions run; local
     const v = await api("/v1/layout");
     if (!dirty) { L = v; render(); return; }
     v.shelves.forEach((s) => { const mine = L.shelves.find((x) => x.id === s.id); if (!mine) return;
-      mine.alert = s.alert; s.items.forEach((it) => { const m = mine.items.find((x) => x.sku === it.sku); if (m && !document.activeElement.dataset.it) m.qty = it.qty; }); });
+      mine.alert = s.alert; mine.findings = s.findings; s.items.forEach((it) => { const m = mine.items.find((x) => x.sku === it.sku); if (m && !document.activeElement.dataset.it) m.qty = it.qty; }); });
     L.log = v.log; drawPlan(); summary();
   } catch (e) {}
 }, 3000);
 load();
 </script>
+<script>window.onAudit = async () => { try { const r = await fetch("/v1/layout", {headers: headers()}); if (r.ok && !dirty) { L = await r.json(); render(); } } catch (e) {} };</script>
 <script src="/static/nemotron.js"></script>
 </body>
 </html>

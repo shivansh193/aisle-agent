@@ -27,7 +27,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from .logic import Bill, Catalogue, HandVisits, StockWatch, TakeDetector, Zone, classify_visit
+from .logic import Bill, Catalogue, HandVisits, StockWatch, TakeDetector, Zone, classify_visit, match_label
 from .models import ModelUnavailable, crop, crop_person, hand_regions
 
 
@@ -61,6 +61,8 @@ class Options:
     hold_no: float = 0.5
     watch_every: float = 5.0           # shelf watch: read each zone's stock this often (0 = off)
     restock_below: float = 0.58        # chosen on half of Retail Shelf Void crops; 82% on the held-out half
+    audit_every: float = 300.0         # shelf audit (wrong-shelf products, price labels) per idle zone (0 = on request only)
+    misplaced_at: float = 0.6          # P(an unlisted product is on the shelf) that makes a finding
     # both
     verify_below: float = 0.5
     merge_within: float = 6.0                  # a repeat take of the same product by the same hand is one item
@@ -88,6 +90,10 @@ class Session:
         self.preview = None                            # (t, jpeg bytes, width, height) of the latest analysed frame
         self.stock = StockWatch(low=self.opt.restock_below, ok=min(0.95, self.opt.restock_below + 0.12))
         self.last_watch: Dict[str, float] = {}
+        self.last_audit: Dict[str, float] = {}
+        self.audit_now = False
+        self.audit_seen: Dict[str, int] = {}          # zone -> audits in a row that found an unlisted product
+        self.audits: Dict[str, dict] = {}             # zone -> latest audit result
         self.subscribers: set = set()
         self.listeners: list = []                 # server-side observers (shop layout stock)
         self.timing = defaultdict(lambda: deque(maxlen=200))
@@ -137,7 +143,7 @@ class Session:
 
         for job in [j for j in self.pending if t >= j["at"]]:
             self.pending.remove(job)
-            if job["kind"] == "watch":
+            if job["kind"] in ("watch", "audit"):
                 jobs.append(dict(job, t=t))
                 continue
             seen = self.last_seen.get(job["shopper"])
@@ -200,8 +206,17 @@ class Session:
                                  "at": v["t_exit"] + self.opt.after_delay})
         for key, r in near.items():                    # after the visits, so an exit frame is never its own "before"
             self.before[key] = (t, self._crop(frame, r, t))
+        busy = {o["zone"] for o in out if o["zone"]}
+        if hasattr(self.engine, "audit") and (self.audit_now or self.opt.audit_every > 0):
+            for z in self.zones:                       # shelf audit, also only while no hand is in the zone
+                last = self.last_audit.setdefault(z.id, t)        # first periodic audit one interval in
+                if z.id not in busy and (self.audit_now or (self.opt.audit_every > 0 and t - last >= self.opt.audit_every)):
+                    self.last_audit[z.id] = t
+                    l, tp, r, b = z.box
+                    self.pending.append({"kind": "audit", "zone": z.id, "shopper": None, "at": t,
+                                         "crop": self._crop(frame, (l * w, tp * h, r * w, b * h), t)})
+            self.audit_now = False
         if self.opt.watch_every > 0:                   # shelf watch, only when no hand is in the zone
-            busy = {o["zone"] for o in out if o["zone"]}
             for z in self.zones:
                 if z.id not in busy and t - self.last_watch.get(z.id, -1e9) >= self.opt.watch_every:
                     self.last_watch[z.id] = t
@@ -239,6 +254,8 @@ class Session:
             out = self.stock.update(job["zone"], job["t"], dist)
             self.counts["restock_alerts"] += sum(1 for e in out if e["type"] == "restock")
             return out
+        if job["kind"] == "audit":
+            return self._audit(job)
         if job["kind"] == "visit":
             s = time.perf_counter()
             crops = ([job["before"]] if job["before"] is not None else []) + [job["after"]]
@@ -289,6 +306,41 @@ class Session:
                     "method": res.get("method", "vlm-choice"), "candidates": res.get("probabilities"),
                     "bill": self.bill.as_dict()})
         return out
+
+    def request_audit(self):
+        """Audit every zone on the next frame (the console's "Audit shelves")."""
+        self.audit_now = True
+
+    def _audit(self, job) -> List[dict]:
+        z = next((z for z in self.zones if z.id == job["zone"]), None)
+        if z is None:
+            return []
+        stocked = [self.catalogue.by_sku[k] for k in (z.skus or [p.sku for p in self.catalogue.products]) if k in self.catalogue.by_sku]
+        s = time.perf_counter()
+        try:
+            res = self.engine.audit(job["crop"], [p.name for p in stocked])
+        except ModelUnavailable as e:
+            return [{"type": "audit", "zone": z.id, "t": round(job.get("t", job["at"]), 2), "error": str(e)[:120], "findings": []}]
+        self._time("audit_ms", s)
+        self.counts["audits"] += 1
+        findings = []
+        mis = res.get("misplaced") or {}
+        p = float(mis.get("p") or 0.0)
+        self.audit_seen[z.id] = self.audit_seen.get(z.id, 0) + 1 if p >= self.opt.misplaced_at else 0
+        if p >= self.opt.misplaced_at:
+            findings.append({"kind": "misplaced", "zone": z.id, "item": mis.get("item") or "a product not on this shelf's list",
+                             "p": round(p, 3), "seen": self.audit_seen[z.id], "expected": [x.name for x in stocked]})
+        for lab in res.get("labels") or []:
+            prod = match_label(lab.get("text", ""), stocked)
+            if prod is not None and abs(float(lab["price"]) - float(prod.price)) >= 1:
+                findings.append({"kind": "price", "zone": z.id, "sku": prod.sku, "product": prod.name,
+                                 "label_price": lab["price"], "catalogue_price": prod.price, "label_text": lab.get("text")})
+        result = {"type": "audit", "zone": z.id, "t": round(job.get("t", job["at"]), 2), "findings": findings,
+                  "labels": res.get("labels") or [], "p_misplaced": round(p, 3), "model": res.get("model"),
+                  "crop": data_uri(job["crop"], 320)}
+        self.audits[z.id] = result
+        self.counts["audit_findings"] += len(findings)
+        return [result] + [{"type": "misplaced" if f["kind"] == "misplaced" else "price_mismatch", **f} for f in findings]
 
     def _set_preview(self, frame, t, width: int = 960):
         """Keep the latest analysed frame as a small JPEG for the live-feed endpoint (any source)."""

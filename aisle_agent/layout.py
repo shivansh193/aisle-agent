@@ -83,9 +83,11 @@ class Layout:
     def replace(self, data: dict) -> dict:
         clean = validate(data)
         with self.lock:
-            old = {s["id"]: s.get("alert") for s in self.data["shelves"]}
-            for s in clean["shelves"]:                              # the editor doesn't own live alerts
-                s["alert"] = old.get(s["id"], s.get("alert"))
+            old = {s["id"]: (s.get("alert"), s.get("findings")) for s in self.data["shelves"]}
+            for s in clean["shelves"]:                              # the editor doesn't own live alerts or findings
+                s["alert"] = old.get(s["id"], (s.get("alert"), None))[0]
+                if old.get(s["id"], (None, None))[1]:
+                    s["findings"] = old[s["id"]][1]
             self.data = clean
             self.save()
         return self.view()
@@ -126,6 +128,12 @@ class Layout:
                     if shelf:
                         shelf["alert"] = {"level": m.get("level"), "t": time.time()}
                         changed = True
+                elif kind == "audit":                                   # shelf audit findings on the plan
+                    shelf = self.shelf_for(m.get("zone"))
+                    if shelf is not None:
+                        shelf["findings"] = [{k: f.get(k) for k in ("kind", "item", "product", "label_price", "catalogue_price")}
+                                             for f in m.get("findings") or []]
+                        changed = True
                 elif kind == "restocked":                               # the camera sees it full again
                     shelf = self.shelf_for(m.get("zone"))
                     if shelf and shelf.get("alert"):
@@ -149,6 +157,13 @@ class Layout:
             self.save()
         return self.view()
 
+    def set_price(self, sku: str, price: float):
+        with self.lock:
+            for p in self.data["products"]:
+                if p["sku"] == sku:
+                    p["price"] = round(float(price), 2)
+                    self.save()
+
     def view(self) -> dict:
         """The layout plus each shelf's state: ok | low | empty | alert."""
         names = {p["sku"]: p for p in self.data["products"]}
@@ -159,6 +174,7 @@ class Layout:
                           "alert" if s.get("alert") else "low" if low else "ok")
             s["low"] = [names[i["sku"]]["name"] for i in low if i["sku"] in names]
             s["units"] = sum(i["qty"] for i in s["items"])
+            s["findings"] = s.get("findings") or []
         out["value"] = round(sum(i["qty"] * names[i["sku"]]["price"] for s in out["shelves"] for i in s["items"]
                                  if i["sku"] in names), 2)
         out["log"] = self.log[-30:]
