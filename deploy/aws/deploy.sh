@@ -8,13 +8,15 @@ HOST=${HOST:?set HOST to the instance IP}
 KEY=${SSH_KEY:-$HOME/.ssh/aisle-agent-aws.pem}
 VJEV_SRC=${VJEV_SRC:-vjev}
 ENGINE=${ENGINE:-nemotron}
+IDLE_MIN=${IDLE_MIN:-15}                       # stop the instance after this long without requests (0: never)
+PAGE_MIN=${PAGE_MIN:-60}                       # ...or this long without a page being opened
 PORT=${SSH_PORT:-22}                           # 2222 on networks that block outbound 22
 SSH=(ssh -p "$PORT" -i "$KEY" -o StrictHostKeyChecking=accept-new "ubuntu@$HOST")
 
 tmp=$(mktemp -d)
-cp -r aisle_agent "$tmp/" && cp -r "$VJEV_SRC" "$tmp/vjev"
+cp -r aisle_agent "$tmp/" && cp -r "$VJEV_SRC" "$tmp/vjev" && cp deploy/aws/idle_stop.py "$tmp/"
 find "$tmp" -name __pycache__ -prune -exec rm -rf {} +
-tar -C "$tmp" -czf "$tmp/app.tgz" aisle_agent vjev
+tar -C "$tmp" -czf "$tmp/app.tgz" aisle_agent vjev idle_stop.py
 scp -P "$PORT" -i "$KEY" -o StrictHostKeyChecking=accept-new "$tmp/app.tgz" "ubuntu@$HOST:/tmp/app.tgz"
 
 {
@@ -22,7 +24,7 @@ scp -P "$PORT" -i "$KEY" -o StrictHostKeyChecking=accept-new "$tmp/app.tgz" "ubu
   [ -f .env ] && grep -E '^(TOKEN_FACTORY_API_KEY|NEBIUS_API_KEY)=' .env || true
 } | "${SSH[@]}" "sudo install -m 600 -o root -g root /dev/stdin /etc/aisle-agent.env"
 
-"${SSH[@]}" "export ENGINE=$ENGINE; "'set -e
+"${SSH[@]}" "export ENGINE=$ENGINE IDLE_MIN=$IDLE_MIN PAGE_MIN=$PAGE_MIN; "'set -e
 test -f /opt/ss/READY || { echo "instance still setting up (see /var/log/cloud-init-output.log)"; exit 3; }
 rm -rf /opt/ss/app.new && mkdir -p /opt/ss/app.new && tar -C /opt/ss/app.new -xzf /tmp/app.tgz
 rm -rf /opt/ss/app && mv /opt/ss/app.new /opt/ss/app
@@ -44,5 +46,48 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 sudo systemctl daemon-reload && sudo systemctl enable --now aisle-agent && sudo systemctl restart aisle-agent
+
+# Access log for the idle check, and the idle check itself (IDLE_MIN=0 turns it off)
+D=$(head -1 /etc/caddy/Caddyfile | cut -d" " -f1)
+sudo mkdir -p /var/log/caddy && sudo chown caddy:caddy /var/log/caddy
+sudo tee /etc/caddy/Caddyfile >/dev/null <<EOF
+$D {
+  encode gzip
+  log {
+    output file /var/log/caddy/access.log {
+      roll_size 20MiB
+      roll_keep 2
+    }
+    format json
+  }
+  reverse_proxy 127.0.0.1:8000 {
+    flush_interval -1
+  }
+}
+EOF
+sudo systemctl reload caddy
+sudo install -m 644 /opt/ss/app/idle_stop.py /opt/ss/idle_stop.py
+sudo tee /etc/systemd/system/aisle-idle-stop.service >/dev/null <<EOF
+[Unit]
+Description=Stop the instance when Aisle Agent is idle
+
+[Service]
+Type=oneshot
+Environment=IDLE_MIN=$IDLE_MIN PAGE_MIN=$PAGE_MIN
+ExecStart=/usr/bin/python3 /opt/ss/idle_stop.py
+EOF
+sudo tee /etc/systemd/system/aisle-idle-stop.timer >/dev/null <<EOF
+[Unit]
+Description=Check for idleness every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
+EOF
+sudo systemctl daemon-reload
+if [ "$IDLE_MIN" = 0 ]; then sudo systemctl disable --now aisle-idle-stop.timer; else sudo systemctl enable --now aisle-idle-stop.timer; fi
 echo deployed'
 rm -rf "$tmp"
