@@ -12,6 +12,7 @@ The thinking is done by **NVIDIA Nemotron models through Nebius Token Factory**:
 | `nvidia/Nemotron-3.5-Super-VL` | Is this hand holding a product, just before and just after a shelf visit? How full is this shelf? Which product is this, among the ones stocked here? **Shelf audit:** is something on this shelf that doesn't belong, and what do its price labels say? | Only when a hand visits a shelf zone; per idle shelf every few seconds (stock) and every 5 minutes or on request (audit) |
 | `nvidia/nemotron-3-super-120b-a12b` | **Exit advisor:** reads a flagged line's evidence and explains it to staff, with a keep / remove / ask-the-shopper recommendation. **Shop assistant** for multi-step questions. | When staff open a flagged line, or ask a "why" question |
 | `nvidia/Nemotron-3_5-Lightning` | Shop assistant for quick lookups ("what's running low?") through tool calls over live shop data | On each question |
+| `nvidia/Nemotron-3-Ultra-550b-a55b` | End-of-day report: sales, restock, uncertain takes and open audit findings | Once a day, or on request |
 
 Cheap models stay local and run on every frame (YOLO11n-pose + ByteTrack find people and hands). A
 hosted model is called only when something happens at a shelf. Calling an API on every frame would

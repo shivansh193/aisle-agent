@@ -38,6 +38,7 @@ over the shelves. Aisle Agent turns that camera into a checkout and a stock cler
 | `nvidia/Nemotron-3.5-Super-VL` | Hand holding a product (before/after each shelf visit), product naming among a shelf's products, shelf stock level, shelf audit (wrong-shelf products, price labels read as JSON), evidence captions | Vision, with logprobs on image prompts, so answers are calibrated probabilities instead of parsed text |
 | `nvidia/nemotron-3-super-120b-a12b` | Exit advisor; shop assistant for multi-step "why" questions | Reasoning over structured evidence; tool calling |
 | `nvidia/Nemotron-3_5-Lightning` | Shop assistant for quick lookups | Fast and cheap for single-tool answers |
+| `nvidia/Nemotron-3-Ultra-550b-a55b` | End-of-day report for the owner | Longest-context summary over the whole day's records, run once |
 
 **The design idea:** a funnel. A local pose model (YOLO11n-pose + ByteTrack) runs on every frame and
 finds hands. Nemotron is called only when a hand actually visits a shelf, so hosted inference costs
@@ -104,6 +105,6 @@ target, and real-shop footage is the next test. The full evaluation through Toke
 
 - Repo: https://github.com/shivansh193/aisle-agent
 - Video: (YouTube, under 3 min)
-- Live demo: https://<ip-with-dashes>.sslip.io (shop key shared with judges in the testing notes)
+- Live demo: https://3-232-60-58.sslip.io (shop key shared with judges in the testing notes)
 
 No affiliation with or endorsement by Nebius or NVIDIA.
