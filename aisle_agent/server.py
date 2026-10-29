@@ -285,7 +285,7 @@ def create_app(engine, max_sessions: int = 4, layout=None, agents=None) -> FastA
             img = decode_jpeg(await request.body())
         except ValueError as e:
             raise HTTPException(400, str(e))
-        return {"events": await s.handle(img, t)}
+        return Response(dumps({"events": await s.handle(img, t)}), media_type="application/json")   # numpy-safe
 
     @app.get("/v1/sessions/{sid}/share")
     def share(sid: str):
