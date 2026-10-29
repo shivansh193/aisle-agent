@@ -23,6 +23,9 @@ over the shelves. Aisle Agent turns that camera into a checkout and a stock cler
   it in plain English, recommending keep, remove or ask the shopper. A person decides. Both go in the
   audit log, and the page shows how often the advisor and staff agree.
 - **The shopper's phone.** A QR code opens the shopper's own live bill, with a "Not mine" button.
+- **Shelf audit.** Between visits, Nemotron VL checks each shelf against the shop layout: it flags a
+  product that doesn't belong there (on the live footage, "Greek yogurt" on the Freezer shelf) and reads
+  the shelf price labels, flagging any that differ from what the bill charges. Staff resolve each finding.
 - **Shelf watch and layout.** Between visits, the same camera reads how full each shelf is and
   raises restock alerts. A floor plan keeps stock per shelf.
 - **Ask the shop.** The owner asks "what's running low?" or "why were the takes on Aisle 2 uncertain?"
@@ -32,7 +35,7 @@ over the shelves. Aisle Agent turns that camera into a checkout and a stock cler
 
 | Model | Task | Why this model |
 |---|---|---|
-| `nvidia/Nemotron-3.5-Super-VL` | Hand holding a product (before/after each shelf visit), product naming among a shelf's products, shelf stock level, evidence captions | Vision, with logprobs on image prompts, so answers are calibrated probabilities instead of parsed text |
+| `nvidia/Nemotron-3.5-Super-VL` | Hand holding a product (before/after each shelf visit), product naming among a shelf's products, shelf stock level, shelf audit (wrong-shelf products, price labels read as JSON), evidence captions | Vision, with logprobs on image prompts, so answers are calibrated probabilities instead of parsed text |
 | `nvidia/nemotron-3-super-120b-a12b` | Exit advisor; shop assistant for multi-step "why" questions | Reasoning over structured evidence; tool calling |
 | `nvidia/Nemotron-3_5-Lightning` | Shop assistant for quick lookups | Fast and cheap for single-tool answers |
 

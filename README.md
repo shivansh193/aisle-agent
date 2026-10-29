@@ -9,7 +9,7 @@ The thinking is done by **NVIDIA Nemotron models through Nebius Token Factory**:
 
 | Model (Token Factory) | What it does in Aisle Agent | When it runs |
 |---|---|---|
-| `nvidia/Nemotron-3.5-Super-VL` | Is this hand holding a product, just before and just after a shelf visit? How full is this shelf? Which product is this, among the ones stocked here? | Only when a hand visits a shelf zone, and every few seconds per idle shelf |
+| `nvidia/Nemotron-3.5-Super-VL` | Is this hand holding a product, just before and just after a shelf visit? How full is this shelf? Which product is this, among the ones stocked here? **Shelf audit:** is something on this shelf that doesn't belong, and what do its price labels say? | Only when a hand visits a shelf zone; per idle shelf every few seconds (stock) and every 5 minutes or on request (audit) |
 | `nvidia/nemotron-3-super-120b-a12b` | **Exit advisor:** reads a flagged line's evidence and explains it to staff, with a keep / remove / ask-the-shopper recommendation. **Shop assistant** for multi-step questions. | When staff open a flagged line, or ask a "why" question |
 | `nvidia/Nemotron-3_5-Lightning` | Shop assistant for quick lookups ("what's running low?") through tool calls over live shop data | On each question |
 
@@ -30,6 +30,7 @@ camera (phone, laptop or IP camera over the shelf)
                holding → empty  = put-back  ─▶ flag the shopper's matching line
                model unavailable            ─▶ visit marked "unchecked" (never guessed)
        idle shelf, every 5 s:  Nemotron VL stock reading (empty / low / half / full) ─▶ restock alert
+       idle shelf, every 5 min or on request:  shelf audit ─▶ wrong-shelf product, price label ≠ catalogue
   bill ─▶ shopper's phone (QR link, live, "Not mine")
        ─▶ exit check: evidence + Nemotron-3-Super advice; a person decides; both are logged
   shop layout ─▶ floor plan, stock per shelf, follows the bill
@@ -56,6 +57,24 @@ decisions** (yes/no, choice, score, box) instead of free text. The new
   `BackendUnavailable`, and the visit stays unchecked or the line stays "verify at exit".
 - **Concurrency, cost, trace:** a semaphore bounds concurrent requests, token cost is counted at
   catalogue prices, and every call (model, latency, tokens, $) shows in the console's model trace.
+
+### Shelf audit
+
+Between visits, Nemotron-3.5-Super-VL audits each shelf zone against the shop layout:
+
+- **Wrong shelf:** "This shelf should hold only: … Is there clearly a product on it that is NOT one of those?"
+  This is a calibrated yes/no from logprobs. If yes, a short follow-up names the product. On the live
+  freezer footage it flagged "Greek yogurt" on the Freezer shelf (P 0.88) in 4.2 s.
+- **Price labels:** the shelf crop is sent at a higher resolution, and Nemotron returns the labels it can
+  read as JSON (`{"labels": [{"text", "price"}]}`), told never to guess a price. Each label is matched to
+  a product on that shelf by its words and compared with the catalogue price the bill charges. A mismatch
+  is a finding, because a shopper who trusts the label would be charged a different price.
+
+Findings carry the shelf crop and go to the console, the layout plan and the assistant. Staff resolve
+them: moved it back, it belongs here, label fixed, or charge the label price (which updates the
+catalogue). **Not yet evaluated on a labelled set:** price reading depends on the labels being legible
+to the camera. On our freezer footage the tags are too small and nothing is read, which is the correct
+behaviour.
 
 ## Results
 
@@ -103,9 +122,9 @@ from that shelf.
 
 | Page | What it is |
 |---|---|
-| `/` | Console: live feed with hands and zones, the bill, shopper QR code, what it saw, **Ask the shop** assistant, **model trace** (every Nemotron call) |
+| `/` | Console: live feed with hands and zones, the bill, shopper QR code, **Shelf audit** findings, what it saw, **Ask the shop** assistant, **model trace** (every Nemotron call) |
 | `/exit` | Exit check: lines to verify, before/after evidence, **Nemotron-3-Super advice**, keep/remove, agreement rate |
-| `/layout` | Shop layout: floor plan, products, stock and minimums per shelf, each tied to a camera zone |
+| `/layout` | Shop layout: floor plan, products, stock and minimums per shelf, each tied to a camera zone; audit findings flagged on the plan |
 | `/b/<token>` | The shopper's phone: their bill, live, with "Not mine" |
 
 Other engines: `--engine stub` (no models, scripted, for UI work) and `--engine vjev` (local
